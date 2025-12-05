@@ -18,8 +18,7 @@ add_executable(throttle src/throttle.cpp)
 target_link_libraries(throttle PUBLIC rclcpp::rclcpp ${std_msgs_TARGETS})
 
 install(TARGETS
-  talker
-  listener
+  throttle
   DESTINATION lib/${PROJECT_NAME})
 
 
