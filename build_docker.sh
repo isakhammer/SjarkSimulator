@@ -1,2 +1,2 @@
 
-docker build -t "ros2-kilted-base" .
+docker build -t "nautomatic-base" .
