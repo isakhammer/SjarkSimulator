@@ -17,6 +17,8 @@ RUN apt-get update && \
         curl \
         tmux \
         vim \
+        gnupg \
+        lsb-release \
         ca-certificates && \
     locale-gen en_US en_US.UTF-8 && \
     update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 && \
@@ -35,18 +37,35 @@ RUN apt-get update && \
 
 # 3) Install dev tools and ROS 2 Kilted (desktop variant)
 #    For bare-bones instead of desktop, replace ros-kilted-desktop with ros-kilted-ros-base
+# Set ROS 2 distro
+ARG ROS_DISTRO=jazzy
+ENV ROS_DISTRO=${ROS_DISTRO}
+
+# 3) Install dev tools, ROS 2 Jazzy desktop, colcon, and TurtleBot3
+#    For bare-bones instead of desktop, replace ros-${ROS_DISTRO}-desktop with ros-${ROS_DISTRO}-ros-base
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
         ros-dev-tools \
-        ros-kilted-desktop && \
+        ros-${ROS_DISTRO}-desktop \
+        python3-colcon-common-extensions \
+        ros-${ROS_DISTRO}-turtlebot3 \
+        ros-${ROS_DISTRO}-turtlebot3-simulations && \
     rm -rf /var/lib/apt/lists/*
 
 
-RUN apt install python3-colcon-common-extensions
 
-RUN apt-get update && apt-get install -y ros-kilted-turtlebot3 ros-kilted-turtlebot3-simulations
-# ros-kilted-gazebo-ros-pkgs ros-kilted-gazebo-ros-control
+# Add Gazebo (gz-harmonic) repository and install
+RUN curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
+        -o /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) \
+        signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] \
+        https://packages.osrfoundation.org/gazebo/ubuntu-stable \
+        $(. /etc/os-release && echo "$UBUNTU_CODENAME") main" \
+        > /etc/apt/sources.list.d/gazebo-stable.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends gz-harmonic && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN rosdep init && \
     rosdep update
