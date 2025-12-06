@@ -4,6 +4,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "msg_definitions/msg/custom.hpp"
 
 using namespace std::chrono_literals;
 

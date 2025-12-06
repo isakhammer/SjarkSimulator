@@ -16,7 +16,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Fibonacci.action"
-  "msg/Float64.msg"
+  "msg/Custom.msg"
   "srv/AddTwoInts.srv"
   "srv/SetBool.srv"
   "srv/Trigger.srv"
