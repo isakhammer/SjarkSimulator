@@ -18,12 +18,12 @@ public:
   MinimalPublisher()
   : Node("minimal_publisher"), count_(0)
   {
-    publisher_ = this->create_publisher<std_msgs::msg::String>("topic", 10);
+    publisher_ = this->create_publisher<msg_definitions::msg::Custom>("topic", 10);
     auto timer_callback =
       [this]() -> void {
-        auto message = std_msgs::msg::String();
-        message.data = "Hello, world! " + std::to_string(this->count_++);
-        RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
+        auto message = msg_definitions::msg::Custom();
+        message.data = 69.0;
+        RCLCPP_INFO_STREAM(this->get_logger(), "Publishing: '" << message.data << "'");
         this->publisher_->publish(message);
       };
     timer_ = this->create_wall_timer(500ms, timer_callback);
@@ -31,7 +31,7 @@ public:
 
 private:
   rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
+  rclcpp::Publisher<msg_definitions::msg::Custom>::SharedPtr publisher_;
   size_t count_;
 };
 
