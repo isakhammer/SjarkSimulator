@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(msg_definitions)
+project(na_msg)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)

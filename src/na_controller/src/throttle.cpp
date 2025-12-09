@@ -4,7 +4,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
-#include "msg_definitions/msg/custom.hpp"
+#include "na_msg/msg/custom.hpp"
 
 using namespace std::chrono_literals;
 
@@ -18,10 +18,10 @@ public:
   MinimalPublisher()
   : Node("minimal_publisher"), count_(0)
   {
-    publisher_ = this->create_publisher<msg_definitions::msg::Custom>("topic", 10);
+    publisher_ = this->create_publisher<na_msg::msg::Custom>("topic", 10);
     auto timer_callback =
       [this]() -> void {
-        auto message = msg_definitions::msg::Custom();
+        auto message = na_msg::msg::Custom();
         message.data = 69.0;
         RCLCPP_INFO_STREAM(this->get_logger(), "Publishing: '" << message.data << "'");
         this->publisher_->publish(message);
@@ -31,7 +31,7 @@ public:
 
 private:
   rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Publisher<msg_definitions::msg::Custom>::SharedPtr publisher_;
+  rclcpp::Publisher<na_msg::msg::Custom>::SharedPtr publisher_;
   size_t count_;
 };
 

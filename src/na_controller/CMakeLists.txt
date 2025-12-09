@@ -12,11 +12,11 @@ find_package(ament_cmake REQUIRED)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(msg_definitions REQUIRED)
+find_package(na_msg REQUIRED)
 find_package(std_msgs REQUIRED)
 
 add_executable(throttle src/throttle.cpp)
-target_link_libraries(throttle PUBLIC rclcpp::rclcpp ${std_msgs_TARGETS} ${msg_definitions_TARGETS})
+target_link_libraries(throttle PUBLIC rclcpp::rclcpp ${std_msgs_TARGETS} ${na_msg_TARGETS})
 
 install(TARGETS
   throttle
