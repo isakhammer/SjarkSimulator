@@ -8,7 +8,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
             Node(
-                package='controller',
+                package='na_controller',
                 namespace="controller_ns",
                 executable='throttle',
                 name='throttle'
