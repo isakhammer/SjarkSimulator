@@ -1,0 +1,117 @@
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float32MultiArray
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import TransformStamped
+from tf2_ros import TransformBroadcaster
+import numpy as np
+
+from Boat3DOF import Boat3DOF
+
+
+class BoatSimNode(Node):
+    def __init__(self):
+        super().__init__("boat_sim")
+
+        # Parameters
+        params = {
+            "m":   70.0,
+            "Iz":  10.0,
+            "Xu":   5.0,
+            "Xuu":  1.0,
+            "Yv":  40.0,
+            "Yr":   5.0,
+            "Nv":   5.0,
+            "Nr":  40.0,
+            "l":    0.5,
+        }
+
+        self.sim = Boat3DOF(params)
+
+        # Thruster inputs
+        self.T_L = 0.0
+        self.T_R = 0.0
+
+        # Subscribers
+        self.sub_cmd = self.create_subscription(
+            Float32MultiArray,
+            "/cmd_thrust",
+            self.cmd_callback,
+            10
+        )
+
+        # Publishers
+        self.pub_state = self.create_publisher(Float32MultiArray, "/boat_state", 10)
+        self.pub_odom  = self.create_publisher(Odometry, "/odom", 10)
+
+        # TF broadcaster
+        self.tf_broadcaster = TransformBroadcaster(self)
+
+        # Time step
+        self.dt = 0.05  # 20 Hz
+        self.timer = self.create_timer(self.dt, self.update)
+
+        self.get_logger().info("Boat 3DOF simulator with Odometry started.")
+
+    def cmd_callback(self, msg):
+        if len(msg.data) >= 2:
+            self.T_L = msg.data[0]
+            self.T_R = msg.data[1]
+
+    def update(self):
+        # Run physics
+        self.sim.step(self.T_L, self.T_R, self.dt)
+        x, y, psi, u, v, r = self.sim.state
+
+        # Publish /boat_state
+        state_msg = Float32MultiArray()
+        state_msg.data = [x, y, psi, u, v, r]
+        self.pub_state.publish(state_msg)
+
+        # Publish Odometry
+        odom = Odometry()
+        odom.header.stamp = self.get_clock().now().to_msg()
+        odom.header.frame_id = "map"
+        odom.child_frame_id = "base_link"
+
+        odom.pose.pose.position.x = x
+        odom.pose.pose.position.y = y
+        odom.pose.pose.position.z = 0.0
+
+        # yaw -> quaternion
+        qz = np.sin(psi / 2.0)
+        qw = np.cos(psi / 2.0)
+        odom.pose.pose.orientation.z = qz
+        odom.pose.pose.orientation.w = qw
+
+        odom.twist.twist.linear.x = u
+        odom.twist.twist.linear.y = v
+        odom.twist.twist.angular.z = r
+
+        self.pub_odom.publish(odom)
+
+        # Publish TF transform
+        t = TransformStamped()
+        t.header.stamp = odom.header.stamp
+        t.header.frame_id = "map"
+        t.child_frame_id = "base_link"
+        t.transform.translation.x = x
+        t.transform.translation.y = y
+        t.transform.translation.z = 0.0
+        t.transform.rotation.z = qz
+        t.transform.rotation.w = qw
+
+        self.tf_broadcaster.sendTransform(t)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = BoatSimNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
