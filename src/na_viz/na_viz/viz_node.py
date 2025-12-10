@@ -109,8 +109,19 @@ class BoatVisualizer(Node):
         arrow.color.b = 0.2
         arrow.color.a = 1.0
 
-        arrow.points.append(Point(x, y, 0.15))
-        arrow.points.append(Point(x + np.cos(psi), y + np.sin(psi), 0.15))
+        p1 = Point()
+        p1.x = x
+        p1.y = y
+        p1.z = 0.15
+        
+        p2 = Point()
+        p2.x = x + np.cos(psi)
+        p2.y = y + np.sin(psi)
+        p2.z = 0.15
+
+
+        arrow.points.append(p1)
+        arrow.points.append(p2)
 
         self.pub_heading.publish(arrow)
 
