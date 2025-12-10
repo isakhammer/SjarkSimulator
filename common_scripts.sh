@@ -1,6 +1,6 @@
 
 source /opt/ros/kilted/setup.bash
-source /root/code/src/install/setup.bash
+source /root/code/install/setup.bash
 
 alias so='source /root/.bashrc'
 alias colb='colcon build --symlink-install'
@@ -11,6 +11,7 @@ alias colc='colcon build --packages-select cpp_pubsub'
 alias install_setup='. install/setup.bash' # do research when to do this.
 
 alias lc='ros2 launch na_launch controller_launch.py'
+alias lsc='ros2 launch na_launch sim_controller_launch.py'
 
 alias makepkg='ros2 pkg create --build-type ament_cmake' # see https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Creating-Your-First-ROS2-Package.html
 

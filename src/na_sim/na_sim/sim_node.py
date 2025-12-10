@@ -7,7 +7,7 @@ from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
 import numpy as np
 
-from Boat3DOF import Boat3DOF
+from na_sim.Boat3DOF import Boat3DOF
 
 
 class BoatSimNode(Node):

@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+                'sim_node = na_sim.sim_node:main',
         ],
     },
 )
