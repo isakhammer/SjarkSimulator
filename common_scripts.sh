@@ -4,7 +4,7 @@ source /root/code/src/install/setup.bash
 alias so='source /root/.bashrc'
 alias colb='colcon build --symlink-install'
 alias cb='colcon build'
-alias cbb='cd /root/code/src/ && colcon build && so'
+alias cbb='cd /root/code/ && colcon build && so'
 
 alias colc='colcon build --packages-select cpp_pubsub'
 alias install_setup='. install/setup.bash' # do research when to do this.
