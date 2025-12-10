@@ -18,11 +18,11 @@ def generate_launch_description():
             namespace='sim_ns',
             executable='sim_node',
             name='sim_node'
+        ),
+        Node(
+            package='na_viz',
+            namespace='viz_ns',
+            executable='viz_node',
+            name='viz_node'
         )
-        # Node(
-        #     package='na_viz',
-        #     namespace='viz_ns',
-        #     executable='viz_node',
-        #     name='viz_node'
-        # )
     ])
