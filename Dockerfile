@@ -4,6 +4,7 @@ FROM ubuntu:24.04
 # Use bash for RUN so we can use source, export, etc.
 SHELL ["/bin/bash", "-c"]
 
+
 # Set noninteractive front-end and locale env vars
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
@@ -18,12 +19,16 @@ RUN apt-get update && \
         tmux \
         vim \
         gnupg \
+        xterm \
         lsb-release \
         ca-certificates && \
     locale-gen en_US en_US.UTF-8 && \
     update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 && \
     add-apt-repository universe && \
     rm -rf /var/lib/apt/lists/*
+
+ENV TERM=xterm-256color
+ENV COLORTERM=truecolor
 
 # 2) Install ros2-apt-source (adds ROS 2 Kilted repository)
 RUN apt-get update && \
@@ -69,6 +74,7 @@ RUN curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
 
 RUN rosdep init && \
     rosdep update
+
 
 # 4) Make every interactive shell source ROS and your workspace helpers
 RUN echo "source /root/code/common_scripts.sh" >> /root/.bashrc
