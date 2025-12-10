@@ -19,4 +19,10 @@ def generate_launch_description():
             executable='sim_node',
             name='sim_node'
         )
+        # Node(
+        #     package='na_viz',
+        #     namespace='viz_ns',
+        #     executable='viz_node',
+        #     name='viz_node'
+        # )
     ])
