@@ -26,6 +26,12 @@ def generate_launch_description():
             name='sim_node'
         ),
         Node(
+            package='na_planner',
+            namespace='planner_ns',
+            executable='planner_node',
+            name='planner_node'
+        ),
+        Node(
             package='na_viz',
             namespace='viz_ns',
             executable='viz_node',
