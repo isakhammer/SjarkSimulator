@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'planner_node = na_planner.planner_node:main',
         ],
     },
 )
