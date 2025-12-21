@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 from nav_msgs.msg import Odometry, Path
+from na_msg.msg import Path as NaPath
 from geometry_msgs.msg import PoseStamped, Point
 from visualization_msgs.msg import Marker
 
@@ -15,36 +16,74 @@ class BoatVisualizer(Node):
         # Subscriptions
         self.sub_odom = self.create_subscription(
             Odometry, "/odom", self.odom_cb, 20)
+        self.sub_path = self.create_subscription(
+            NaPath, "/planner_ns/path", self.path_cb, 20)
 
         # Publishers
-        self.pub_path = self.create_publisher(Path, "/viz/path", 10)
+        self.pub_path_trace = self.create_publisher(Path, "/viz/path_trace", 10)
         self.pub_boat = self.create_publisher(Marker, "/viz/boat_marker", 10)
         self.pub_heading = self.create_publisher(Marker, "/viz/heading_marker", 10)
+        self.pub_planner_path = self.create_publisher(Marker, "/viz/path", 10)
 
         # Internal path storage
-        self.path = Path()
-        self.path.header.frame_id = "map"
+        self.path_trace = Path()
+        self.path_trace.header.frame_id = "map"
 
         self.get_logger().info("BoatVisualizer started (no thrust arrows)")
+
+
+    # --------------------------------------------------------
+    # MAIN CALLBACK
+    # --------------------------------------------------------
+    def path_cb(self, msg):
+        n = len(msg.wpts_x)
+        if n < 2 or n != len(msg.wpts_y) or n != len(msg.wpts_z):
+            self.get_logger().error("Invalid planner path")
+            return
+    
+        marker = Marker()
+        marker.header.frame_id = "map"
+        marker.header.stamp = self.get_clock().now().to_msg()
+    
+        marker.ns = "path_viz"
+        marker.id = 0
+        marker.type = Marker.LINE_STRIP
+        marker.action = Marker.ADD
+    
+        marker.scale.x = 0.05
+    
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.3
+        marker.color.a = 1.0
+    
+        for i in range(n):
+            p = Point()
+            p.x = msg.wpts_x[i]
+            p.y = msg.wpts_y[i]
+            p.z = msg.wpts_z[i]
+            marker.points.append(p)
+
+        self.pub_planner_path.publish(marker)
+
 
     # --------------------------------------------------------
     # PATH TRACE
     # --------------------------------------------------------
-    def update_path(self, msg):
+    def update_path_trace(self, msg):
         pose = PoseStamped()
         pose.header = msg.header
         pose.pose = msg.pose.pose
 
-        self.path.header.stamp = msg.header.stamp
-        self.path.poses.append(pose)
-
-        self.pub_path.publish(self.path)
+        self.path_trace.header.stamp = msg.header.stamp
+        self.path_trace.poses.append(pose)
+        self.pub_path_trace.publish(self.path_trace)
 
     # --------------------------------------------------------
     # MAIN CALLBACK
     # --------------------------------------------------------
     def odom_cb(self, msg):
-        self.update_path(msg)
+        self.update_path_trace(msg)
         self.publish_boat_marker(msg)
         self.publish_heading_arrow(msg)
 
