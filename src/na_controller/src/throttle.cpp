@@ -71,9 +71,9 @@ private:
 
     thrust_pub_->publish(msg);
 
-    RCLCPP_INFO_STREAM(this->get_logger(),
-       "t=" << t << "  T_L=" << T_L << "  T_R=" << T_R
-             << "  psi=" << state_[2] << "  u=" << state_[3]);
+    // RCLCPP_INFO_STREAM(this->get_logger(),
+    //    "t=" << t << "  T_L=" << T_L << "  T_R=" << T_R
+    //          << "  psi=" << state_[2] << "  u=" << state_[3]);
   }
 };
 
