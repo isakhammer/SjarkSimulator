@@ -11,16 +11,13 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 
 find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(na_msg REQUIRED)
-find_package(std_msgs REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 
-add_executable(throttle src/throttle.cpp)
-target_link_libraries(throttle PUBLIC rclcpp::rclcpp ${std_msgs_TARGETS} ${na_msg_TARGETS})
-
-install(TARGETS
-  throttle
-  DESTINATION lib/${PROJECT_NAME})
+ament_python_install_package(${PROJECT_NAME})
+install(PROGRAMS
+  na_controller/controller_node.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME controller_node)
 
 
 if(BUILD_TESTING)
