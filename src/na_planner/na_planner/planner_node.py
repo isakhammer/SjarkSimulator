@@ -15,32 +15,65 @@ class PlannerPublisher(Node):
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
 
+    def build_square_sine_path(
+        self,
+        side_length: float = 20.0,
+        samples_per_edge: int = 60,
+        amplitude: float = 1.5,
+        cycles_per_edge: float = 2.0,
+    ):
+        half = side_length / 2.0
+        corners = [
+            (-half, -half),
+            (half, -half),
+            (half, half),
+            (-half, half),
+        ]
+
+        xs = []
+        ys = []
+        for idx in range(4):
+            x0, y0 = corners[idx]
+            x1, y1 = corners[(idx + 1) % 4]
+            dx = x1 - x0
+            dy = y1 - y0
+            length = (dx**2 + dy**2) ** 0.5
+            if length == 0.0:
+                continue
+            ux = dx / length
+            uy = dy / length
+            # Left-hand normal
+            nx = -uy
+            ny = ux
+
+            for j in range(samples_per_edge):
+                s = j / samples_per_edge
+                phase = 2.0 * np.pi * cycles_per_edge * s
+                offset = amplitude * np.sin(phase)
+                xs.append(x0 + dx * s + nx * offset)
+                ys.append(y0 + dy * s + ny * offset)
+
+        # Close the loop
+        xs.append(xs[0])
+        ys.append(ys[0])
+
+        zs = np.zeros(len(xs))
+        return np.array(xs), np.array(ys), zs
+
     def timer_callback(self):
         wpts = Path()
-    
-        # Forward progression
-        x = np.linspace(0.0, 10.0, 50)
-    
-        # S-shape in y
-        amplitude = 2.0     # lateral excursion
-        wavelength = 10.0   # length of the S
-        y = amplitude * np.sin(2.0 * np.pi * x / wavelength)
-    
-        # Flat in z
-        z = np.zeros_like(x)
-    
-        wpts.wpts_x = x
-        wpts.wpts_y = y
-        wpts.wpts_z = z
-    
+
+        x, y, z = self.build_square_sine_path()
+        wpts.wpts_x = x.tolist()
+        wpts.wpts_y = y.tolist()
+        wpts.wpts_z = z.tolist()
+
         self.publisher_.publish(wpts)
-        print("Publishing", self.i, wpts)
         self.i += 1
 
 
 def main(args=None):
 
-    print("HELLOWOWOWOW")
     rclpy.init(args=args)
     node = PlannerPublisher()
     rclpy.spin(node)
