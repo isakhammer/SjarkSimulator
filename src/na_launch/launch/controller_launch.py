@@ -10,12 +10,6 @@ def generate_launch_description():
             Node(
                 package='na_controller',
                 namespace="controller_ns",
-                executable='throttle',
-                name='throttle'
-                ),
-            Node(
-                package='na_controller',
-                namespace="controller_ns",
                 executable='controller_node',
                 name='controller_node'
                 )
