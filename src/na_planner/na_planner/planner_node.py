@@ -1,74 +1,47 @@
 import rclpy
 import numpy as np
-from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
-from std_msgs.msg import String
-from na_msg.msg import Path 
+from na_utils.bspline import find_start_u
+from na_msg.msg import BsplinePath
 
 
 class PlannerPublisher(Node):
     def __init__(self):
         super().__init__('planner_publisher')
-        self.publisher_ = self.create_publisher(Path, 'path', 10)
+        self.publisher_ = self.create_publisher(BsplinePath, 'path', 10)
         timer_period = 0.5  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
 
-    def build_square_sine_path(
+    def build_circle_path(
         self,
-        side_length: float = 20.0,
-        samples_per_edge: int = 60,
-        amplitude: float = 1.5,
-        cycles_per_edge: float = 2.0,
+        radius: float = 15.0,
+        control_points: int = 12,
     ):
-        half = side_length / 2.0
-        corners = [
-            (-half, -half),
-            (half, -half),
-            (half, half),
-            (-half, half),
+        # Control points around a circle centered at (0, R).
+        angles = np.linspace(0.0, 2.0 * np.pi, control_points, endpoint=False)
+        cx = 0.0
+        cy = radius
+        control = [
+            (cx + radius * np.cos(a), cy + radius * np.sin(a))
+            for a in angles
         ]
-
-        xs = []
-        ys = []
-        for idx in range(4):
-            x0, y0 = corners[idx]
-            x1, y1 = corners[(idx + 1) % 4]
-            dx = x1 - x0
-            dy = y1 - y0
-            length = (dx**2 + dy**2) ** 0.5
-            if length == 0.0:
-                continue
-            ux = dx / length
-            uy = dy / length
-            # Left-hand normal
-            nx = -uy
-            ny = ux
-
-            for j in range(samples_per_edge):
-                s = j / samples_per_edge
-                phase = 2.0 * np.pi * cycles_per_edge * s
-                offset = amplitude * np.sin(phase)
-                xs.append(x0 + dx * s + nx * offset)
-                ys.append(y0 + dy * s + ny * offset)
-
-        # Close the loop
-        xs.append(xs[0])
-        ys.append(ys[0])
-
-        zs = np.zeros(len(xs))
-        return np.array(xs), np.array(ys), zs
+        start_u = find_start_u(control)
+        return control, start_u
 
     def timer_callback(self):
-        wpts = Path()
+        msg = BsplinePath()
+        control, start_u = self.build_circle_path()
 
-        x, y, z = self.build_square_sine_path()
-        wpts.wpts_x = x.tolist()
-        wpts.wpts_y = y.tolist()
-        wpts.wpts_z = z.tolist()
+        msg.ctrl_x = [p[0] for p in control]
+        msg.ctrl_y = [p[1] for p in control]
+        msg.ctrl_z = [0.0 for _ in control]
+        msg.degree = 3
+        msg.closed = True
+        msg.start_u = float(start_u)
 
-        self.publisher_.publish(wpts)
+        self.publisher_.publish(msg)
         self.i += 1
 
 
