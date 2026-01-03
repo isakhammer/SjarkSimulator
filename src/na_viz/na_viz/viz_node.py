@@ -2,7 +2,9 @@ import rclpy
 from rclpy.node import Node
 
 from nav_msgs.msg import Odometry, Path
-from na_msg.msg import Path as NaPath
+
+from na_utils.bspline import eval_bspline
+from na_msg.msg import BsplinePath, ControllerState
 from geometry_msgs.msg import PoseStamped, Point
 from visualization_msgs.msg import Marker
 
@@ -17,17 +19,22 @@ class BoatVisualizer(Node):
         self.sub_odom = self.create_subscription(
             Odometry, "/odom", self.odom_cb, 20)
         self.sub_path = self.create_subscription(
-            NaPath, "/planner_ns/path", self.path_cb, 20)
+            BsplinePath, "/planner_ns/path", self.path_cb, 20)
+        self.sub_controller = self.create_subscription(
+            ControllerState, "/controller_ns/controller_state", self.controller_state_cb, 20)
 
         # Publishers
         self.pub_path_trace = self.create_publisher(Path, "/viz/path_trace", 10)
         self.pub_boat = self.create_publisher(Marker, "/viz/boat_marker", 10)
         self.pub_heading = self.create_publisher(Marker, "/viz/heading_marker", 10)
         self.pub_planner_path = self.create_publisher(Marker, "/viz/path", 10)
+        self.pub_cte = self.create_publisher(Marker, "/viz/cte", 10)
+        self.pub_los_target = self.create_publisher(Marker, "/viz/los_target", 10)
 
         # Internal path storage
         self.path_trace = Path()
         self.path_trace.header.frame_id = "map"
+        self.last_pose = None
 
         self.get_logger().info("BoatVisualizer started (no thrust arrows)")
 
@@ -36,11 +43,21 @@ class BoatVisualizer(Node):
     # MAIN CALLBACK
     # --------------------------------------------------------
     def path_cb(self, msg):
-        n = len(msg.wpts_x)
-        if n < 2 or n != len(msg.wpts_y) or n != len(msg.wpts_z):
-            self.get_logger().error("Invalid planner path")
+        n = len(msg.ctrl_x)
+        if n < 4 or n != len(msg.ctrl_y):
+            self.get_logger().error("Invalid planner spline")
             return
-    
+
+        control = [(msg.ctrl_x[i], msg.ctrl_y[i]) for i in range(n)]
+        samples = 400
+        u_start = msg.start_u
+        if msg.closed:
+            u_end = msg.start_u + n
+        else:
+            u_start = 0.0
+            u_end = max(1.0, n - 3.0)
+        du = (u_end - u_start) / (samples - 1)
+
         marker = Marker()
         marker.header.frame_id = "map"
         marker.header.stamp = self.get_clock().now().to_msg()
@@ -57,11 +74,13 @@ class BoatVisualizer(Node):
         marker.color.b = 0.3
         marker.color.a = 1.0
     
-        for i in range(n):
+        for i in range(samples):
             p = Point()
-            p.x = msg.wpts_x[i]
-            p.y = msg.wpts_y[i]
-            p.z = msg.wpts_z[i]
+            u = u_start + du * i
+            x, y = eval_bspline(control, u)
+            p.x = x
+            p.y = y
+            p.z = 0.0
             marker.points.append(p)
 
         self.pub_planner_path.publish(marker)
@@ -83,9 +102,62 @@ class BoatVisualizer(Node):
     # MAIN CALLBACK
     # --------------------------------------------------------
     def odom_cb(self, msg):
+        self.last_pose = msg.pose.pose
         self.update_path_trace(msg)
         self.publish_boat_marker(msg)
         self.publish_heading_arrow(msg)
+
+    def controller_state_cb(self, msg):
+        if self.last_pose is None:
+            return
+
+        target = Marker()
+        target.header.frame_id = "map"
+        target.header.stamp = self.get_clock().now().to_msg()
+        target.ns = "los_target"
+        target.id = 0
+        target.type = Marker.SPHERE
+        target.action = Marker.ADD
+        target.scale.x = 0.6
+        target.scale.y = 0.6
+        target.scale.z = 0.6
+        target.color.r = 1.0
+        target.color.g = 0.8
+        target.color.b = 0.0
+        target.color.a = 1.0
+        target.pose.position.x = msg.target_x
+        target.pose.position.y = msg.target_y
+        target.pose.position.z = 0.0
+        target.pose.orientation.w = 1.0
+        self.pub_los_target.publish(target)
+
+        m = Marker()
+        m.header.frame_id = "map"
+        m.header.stamp = self.get_clock().now().to_msg()
+        m.ns = "cte"
+        m.id = 0
+        m.type = Marker.LINE_LIST
+        m.action = Marker.ADD
+        m.scale.x = 0.05
+        m.color.r = 1.0
+        m.color.g = 0.2
+        m.color.b = 0.2
+        m.color.a = 1.0
+
+        p0 = Point()
+        p0.x = self.last_pose.position.x
+        p0.y = self.last_pose.position.y
+        p0.z = 0.0
+
+        p1 = Point()
+        p1.x = msg.proj_x
+        p1.y = msg.proj_y
+        p1.z = 0.0
+
+        m.points.append(p0)
+        m.points.append(p1)
+
+        self.pub_cte.publish(m)
 
     # --------------------------------------------------------
     # BOAT MARKER (cube hull)

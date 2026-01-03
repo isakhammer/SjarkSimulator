@@ -128,6 +128,32 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /viz/path
       Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Marker
+      Namespaces:
+        cte: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz/cte
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Marker
+      Namespaces:
+        los_target: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz/los_target
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -174,25 +200,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 55.3535041809082
+      Distance: 61.213741302490234
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 16.191795349121094
-        Y: -3.864511251449585
-        Z: -1.9655735492706299
+        X: 1.8060328960418701
+        Y: 3.929763078689575
+        Z: -8.942527770996094
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
+      Pitch: 1.1697971820831299
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 3.0982260704040527
+      Yaw: 2.243227243423462
     Saved:
       - Class: rviz_default_plugins/Orbit
         Distance: 55.3535041809082
