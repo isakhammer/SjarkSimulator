@@ -20,6 +20,12 @@ def generate_launch_description():
             name='throttle'
         ),
         Node(
+            package='na_controller',
+            namespace='controller_ns',
+            executable='controller_node',
+            name='controller_node'
+        ),
+        Node(
             package='na_sim',
             namespace='sim_ns',
             executable='sim_node',
