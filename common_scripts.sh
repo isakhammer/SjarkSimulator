@@ -3,11 +3,14 @@ source /opt/ros/kilted/setup.bash
 source /root/code/install/setup.bash
 
 alias so='source /root/.bashrc'
-alias colb='colcon build --symlink-install'
+alias cbs='colcon build --symlink-install'
 # alias cb='colcon build'
 alias pyfast='cd /root/code/src/na_utils && pytest test'
+
 # TODO: Add a separate alias to run pytest across all ROS 2 packages.
-alias cbb='cd /root/code/ && colcon build && pyfast && so'
+alias cb='cd /root/code/ && colcon build --symlink-install && so'
+alias cbb='cd /root/code/ && colcon build --symlink-install && pyfast && so'
+alias cbbb='cd /root/code/ && rm -rf build install log src/*/build src/*/install src/*/log && colcon build --symlink-install && pyfast && so'
 
 
 alias colc='colcon build --packages-select cpp_pubsub'
