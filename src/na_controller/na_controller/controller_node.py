@@ -8,7 +8,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from ament_index_python.packages import get_package_share_directory
 
-from na_utils.bspline import BSplinePath
+from na_utils.bspline import BSplinePath, samples_from_density
 from na_utils.ros_params import load_ros_params
 from na_msg.msg import BsplinePath, ControllerState
 
@@ -34,6 +34,7 @@ class ControllerNode(Node):
             "max_thrust": 40.0,
             "max_delta": 15.0,
             "spline_samples": 400,
+            "samples_per_meter": 4.0,
         }
         defaults = load_ros_params(
             config_path, "controller_node", defaults, logger=self.get_logger()
@@ -77,9 +78,17 @@ class ControllerNode(Node):
             return
 
         new_points = [(msg.ctrl_x[i], msg.ctrl_y[i]) for i in range(n)]
-        samples = int(self.get_parameter("spline_samples").value)
-        if samples < 50:
-            samples = 50
+        samples_per_meter = float(self.get_parameter("samples_per_meter").value)
+        if samples_per_meter > 0.0:
+            samples = samples_from_density(
+                new_points,
+                samples_per_meter,
+                closed=bool(msg.closed),
+            )
+        else:
+            samples = int(self.get_parameter("spline_samples").value)
+            if samples < 50:
+                samples = 50
 
         self.spline = BSplinePath(
             new_points, msg.start_u, samples, closed=bool(msg.closed)
