@@ -14,7 +14,10 @@
   <test_depend>ament_lint_common</test_depend>
 
   <depend>std_msgs</depend>
+  <depend>rclpy</depend>
+  <depend>na_msg</depend>
   <depend>na_utils</depend>
+  <depend>ament_index_python</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

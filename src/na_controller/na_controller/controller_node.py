@@ -2,18 +2,45 @@
 
 import bisect
 import math
+import os
 
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
+from ament_index_python.packages import get_package_share_directory
 
 from na_utils.bspline import build_spline_samples
+from na_utils.ros_params import load_ros_params
 from na_msg.msg import BsplinePath, ControllerState
 
 
 class ControllerNode(Node):
     def __init__(self):
         super().__init__("simple_controller")
+
+        default_config = os.path.join(
+            get_package_share_directory("na_launch"),
+            "config",
+            "sim_controller_params.yaml",
+        )
+        self.declare_parameter("config_path", default_config)
+        config_path = self.get_parameter("config_path").get_parameter_value().string_value
+
+        defaults = {
+            "path_topic": "/planner_ns/path",
+            "lookahead": 3.0,
+            "base_thrust": 25.0,
+            "heading_kp": 10.0,
+            "heading_kd": 2.0,
+            "max_thrust": 40.0,
+            "max_delta": 15.0,
+            "spline_samples": 400,
+        }
+        defaults = load_ros_params(
+            config_path, "controller_node", defaults, logger=self.get_logger()
+        )
+        for name, value in defaults.items():
+            self.declare_parameter(name, value)
 
         # Publisher: thrust command [T_L, T_R]
         self.thrust_pub = self.create_publisher(Float32MultiArray, "/cmd_thrust", 10)
@@ -24,7 +51,6 @@ class ControllerNode(Node):
         )
 
         # Subscriber: planner spline path
-        self.declare_parameter("path_topic", "/planner_ns/path")
         path_topic = self.get_parameter("path_topic").get_parameter_value().string_value
         self.path_sub = self.create_subscription(
             BsplinePath, path_topic, self.path_callback, 10
@@ -35,15 +61,6 @@ class ControllerNode(Node):
 
         # Control loop timer
         self.timer = self.create_timer(0.02, self.control_loop)
-
-        # LOS controller parameters
-        self.declare_parameter("lookahead", 3.0)
-        self.declare_parameter("base_thrust", 20.0)
-        self.declare_parameter("heading_kp", 8.0)
-        self.declare_parameter("heading_kd", 2.0)
-        self.declare_parameter("max_thrust", 40.0)
-        self.declare_parameter("max_delta", 15.0)
-        self.declare_parameter("spline_samples", 400)
 
         self.state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # x,y,psi,u,v,r
         self.control_points = []

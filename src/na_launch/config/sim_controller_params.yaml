@@ -1,0 +1,23 @@
+controller_node:
+  ros__parameters:
+    path_topic: /planner_ns/path
+    lookahead: 3.0
+    base_thrust: 25.0
+    heading_kp: 10.0
+    heading_kd: 2.0
+    max_thrust: 40.0
+    max_delta: 15.0
+    spline_samples: 400
+
+sim_node:
+  ros__parameters:
+    m: 70.0
+    Iz: 10.0
+    Xu: 5.0
+    Xuu: 1.0
+    Yv: 40.0
+    Yr: 5.0
+    Nv: 5.0
+    Nr: 40.0
+    l: 0.5
+    dt: 0.05

@@ -1,4 +1,6 @@
 
+import os
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
@@ -6,8 +8,10 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
 import numpy as np
+from ament_index_python.packages import get_package_share_directory
 
 from na_sim.Boat3DOF import Boat3DOF
+from na_utils.ros_params import load_ros_params
 
 
 class BoatSimNode(Node):
@@ -15,16 +19,42 @@ class BoatSimNode(Node):
         super().__init__("boat_sim")
 
         # Parameters
+        default_config = os.path.join(
+            get_package_share_directory("na_launch"),
+            "config",
+            "sim_controller_params.yaml",
+        )
+        self.declare_parameter("config_path", default_config)
+        config_path = self.get_parameter("config_path").get_parameter_value().string_value
+
+        defaults = {
+            "m": 70.0,
+            "Iz": 10.0,
+            "Xu": 5.0,
+            "Xuu": 1.0,
+            "Yv": 40.0,
+            "Yr": 5.0,
+            "Nv": 5.0,
+            "Nr": 40.0,
+            "l": 0.5,
+            "dt": 0.05,
+        }
+        defaults = load_ros_params(
+            config_path, "sim_node", defaults, logger=self.get_logger()
+        )
+        for name, value in defaults.items():
+            self.declare_parameter(name, value)
+
         params = {
-            "m":   70.0,
-            "Iz":  10.0,
-            "Xu":   5.0,
-            "Xuu":  1.0,
-            "Yv":  40.0,
-            "Yr":   5.0,
-            "Nv":   5.0,
-            "Nr":  40.0,
-            "l":    0.5,
+            "m": self.get_parameter("m").get_parameter_value().double_value,
+            "Iz": self.get_parameter("Iz").get_parameter_value().double_value,
+            "Xu": self.get_parameter("Xu").get_parameter_value().double_value,
+            "Xuu": self.get_parameter("Xuu").get_parameter_value().double_value,
+            "Yv": self.get_parameter("Yv").get_parameter_value().double_value,
+            "Yr": self.get_parameter("Yr").get_parameter_value().double_value,
+            "Nv": self.get_parameter("Nv").get_parameter_value().double_value,
+            "Nr": self.get_parameter("Nr").get_parameter_value().double_value,
+            "l": self.get_parameter("l").get_parameter_value().double_value,
         }
 
         self.sim = Boat3DOF(params)
@@ -49,7 +79,7 @@ class BoatSimNode(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
 
         # Time step
-        self.dt = 0.05  # 20 Hz
+        self.dt = self.get_parameter("dt").get_parameter_value().double_value
         self.timer = self.create_timer(self.dt, self.update)
 
         self.get_logger().info("Boat 3DOF simulator with Odometry started.")
