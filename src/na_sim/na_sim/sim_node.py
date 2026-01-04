@@ -71,7 +71,7 @@ class BoatSimNode(Node):
 
         # Time step
         self.dt = float(self.get_parameter("dt").value)
-        self.timer = self.create_timer(self.dt, self.update)
+        self.timer = self.create_timer(0.02, self.update)
 
         self.get_logger().info("Boat 3DOF simulator with Odometry started.")
 

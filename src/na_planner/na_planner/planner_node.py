@@ -32,51 +32,106 @@ class PlannerPublisher(Node):
             (cx + radius * math.cos(a), cy + radius * math.sin(a))
             for a in angles
         ]
-        path = BSplinePath.from_control_points(control, samples=400, closed=True)
+        samples_per_meter = float(self.get_parameter("samples_per_meter").value)
+        preview_samples = samples_from_density(
+            control, samples_per_meter, closed=True
+        )
+        control, start_u = self._align_path_to_origin(
+            control, samples=preview_samples
+        )
+        path = BSplinePath.from_control_points(
+            control, samples=preview_samples, closed=True, start_u=start_u
+        )
         return path.control_points, path.start_u
 
     def get_square_sinus(
         self,
         side: float = 30.0,
-        zigzags_per_edge: int = 5,
-        amplitude: float = 4.0,
+        zigzags_per_edge: int = 2,
+        amplitude: float = 1.0,
     ):
-        oscillations = max(1, int(zigzags_per_edge))
         if side <= 0.0:
             side = 30.0
-        max_amp = max(0.0, side * 0.3)
-        amp = max(0.0, min(float(amplitude), max_amp))
-        points_per_edge = max(8, oscillations * 8)
-        if points_per_edge % 2 != 0:
-            points_per_edge += 1
-
-        def edge_points(start, end, normal):
-            pts = []
-            sx, sy = start
-            ex, ey = end
-            nx, ny = normal
-            for k in range(points_per_edge + 1):
-                t = k / points_per_edge
-                wave = math.sin(2.0 * math.pi * oscillations * t) ** 3
-                x = sx + (ex - sx) * t + nx * amp * wave
-                y = sy + (ey - sy) * t + ny * amp * wave
-                pts.append((x, y))
-            return pts
-
+        points_per_edge = max(1, int(zigzags_per_edge))
+        corner_weight = max(0.0, min(float(amplitude), 1.0))
+        corner_repeats = 1 + int(round(corner_weight))
         half = side / 2.0
-        bottom = edge_points((-half, 0.0), (half, 0.0), (0.0, 1.0))
-        right = edge_points((half, 0.0), (half, side), (-1.0, 0.0))
-        top = edge_points((half, side), (-half, side), (0.0, -1.0))
-        left = edge_points((-half, side), (-half, 0.0), (1.0, 0.0))
-        control = bottom + right[1:] + top[1:] + left[1:-1]
-        # Start at the bottom edge midpoint so origin sits on the boundary.
-        origin_idx = len(bottom) // 2
-        control = control[origin_idx:] + control[:origin_idx]
-
+        corners = [
+            (half, -half),
+            (half, half),
+            (-half, half),
+            (-half, -half),
+        ]
+        control = []
+        for idx, start in enumerate(corners):
+            end = corners[(idx + 1) % len(corners)]
+            for i in range(points_per_edge):
+                t = i / points_per_edge
+                x = start[0] + (end[0] - start[0]) * t
+                y = start[1] + (end[1] - start[1]) * t
+                if i == 0:
+                    control.extend([(x, y)] * corner_repeats)
+                else:
+                    control.append((x, y))
+        samples_per_meter = float(self.get_parameter("samples_per_meter").value)
+        preview_samples = samples_from_density(
+            control, samples_per_meter, closed=True
+        )
+        control, start_u = self._align_path_to_origin(
+            control, samples=preview_samples
+        )
         path = BSplinePath.from_control_points(
-            control, samples=400, closed=True, start_u=0.0
+            control, samples=preview_samples, closed=True, start_u=start_u
         )
         return path.control_points, path.start_u
+
+    def _align_path_to_origin(self, control, samples: int = 400):
+        # Anchor the lowest-y sample at the origin and align its heading with +x.
+        preview = BSplinePath.from_control_points(
+            control, samples=samples, closed=True, start_u=0.0
+        )
+        if preview.empty():
+            return list(control), 0.0
+
+        min_y = min(p[1] for p in preview.points)
+        tol = max(1e-6, (max(p[1] for p in preview.points) - min_y) * 1e-3)
+        candidates = [
+            i for i, p in enumerate(preview.points) if p[1] <= min_y + tol
+        ]
+        if candidates:
+            anchor_idx = min(
+                candidates,
+                key=lambda i: preview.points[i][0] ** 2 + preview.points[i][1] ** 2,
+            )
+        else:
+            anchor_idx = 0
+        anchor = preview.points[anchor_idx]
+        tangent, _ = preview._tangent_normal(anchor_idx)
+        tan_x, tan_y = tangent
+        if abs(tan_x) < 1e-6 and abs(tan_y) < 1e-6:
+            next_idx = (
+                anchor_idx + 1 if anchor_idx < len(preview.points) - 1 else 0
+            )
+            tan_x = preview.points[next_idx][0] - anchor[0]
+            tan_y = preview.points[next_idx][1] - anchor[1]
+
+        angle = math.atan2(tan_y, tan_x)
+        cos_a = math.cos(-angle)
+        sin_a = math.sin(-angle)
+
+        def rotate(pt):
+            x, y = pt
+            return (x * cos_a - y * sin_a, x * sin_a + y * cos_a)
+
+        anchor_rot = rotate(anchor)
+        offset_x = -anchor_rot[0]
+        offset_y = -anchor_rot[1]
+        aligned = []
+        for pt in control:
+            rx, ry = rotate(pt)
+            aligned.append((rx + offset_x, ry + offset_y))
+
+        return aligned, 0.0
 
     def timer_callback(self):
         msg = BsplinePath()
