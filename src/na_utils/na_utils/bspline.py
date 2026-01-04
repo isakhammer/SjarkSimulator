@@ -203,6 +203,45 @@ def build_spline_samples(control_points, start_u, samples, closed=True):
     return points, params, arc
 
 
+def estimate_spline_length(control_points, closed=True, samples=100):
+    """Estimate arc length with a coarse spline sampling."""
+    n = len(control_points)
+    if n < 4 or samples < 2:
+        return 0.0
+
+    u_start = 0.0
+    u_end = float(n) if closed else max(1.0, n - 3.0)
+    du = (u_end - u_start) / (samples - 1)
+
+    prev_x, prev_y = eval_bspline(control_points, u_start)
+    length = 0.0
+    for k in range(1, samples):
+        u = u_start + du * k
+        x, y = eval_bspline(control_points, u)
+        length += math.hypot(x - prev_x, y - prev_y)
+        prev_x, prev_y = x, y
+    return length
+
+
+def samples_from_density(
+    control_points,
+    samples_per_meter,
+    closed=True,
+    min_samples=50,
+    estimate_samples=100,
+):
+    """Convert samples-per-meter into a sample count."""
+    if samples_per_meter <= 0.0:
+        return max(min_samples, 2)
+    length = estimate_spline_length(
+        control_points, closed=closed, samples=estimate_samples
+    )
+    if length <= 0.0:
+        return max(min_samples, 2)
+    target = int(math.ceil(length * samples_per_meter)) + 1
+    return max(min_samples, target)
+
+
 def find_start_u(control_points, samples=400):
     n = len(control_points)
     if n < 4:

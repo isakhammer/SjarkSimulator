@@ -3,7 +3,7 @@ from rclpy.node import Node
 
 from nav_msgs.msg import Odometry, Path
 
-from na_utils.bspline import eval_bspline
+from na_utils.bspline import eval_bspline, samples_from_density
 from na_msg.msg import BsplinePath, ControllerState
 from geometry_msgs.msg import PoseStamped, Point
 from visualization_msgs.msg import Marker
@@ -14,6 +14,7 @@ import numpy as np
 class BoatVisualizer(Node):
     def __init__(self):
         super().__init__("boat_visualizer")
+        self.declare_parameter("samples_per_meter", 4.0)
 
         # Subscriptions
         self.sub_odom = self.create_subscription(
@@ -49,7 +50,10 @@ class BoatVisualizer(Node):
             return
 
         control = [(msg.ctrl_x[i], msg.ctrl_y[i]) for i in range(n)]
-        samples = 400
+        samples_per_meter = float(self.get_parameter("samples_per_meter").value)
+        samples = samples_from_density(
+            control, samples_per_meter, closed=bool(msg.closed)
+        )
         u_start = msg.start_u
         if msg.closed:
             u_end = msg.start_u + n

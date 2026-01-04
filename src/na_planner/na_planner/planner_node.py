@@ -1,7 +1,7 @@
 import math
 
 from na_msg.msg import BsplinePath
-from na_utils.bspline import BSplinePath
+from na_utils.bspline import BSplinePath, samples_from_density
 import rclpy
 from rclpy.node import Node
 
@@ -12,8 +12,9 @@ class PlannerPublisher(Node):
     def __init__(self):
         super().__init__('planner_publisher')
         self.declare_parameter("path_type", "SQUARE_SINUS")
+        self.declare_parameter("samples_per_meter", 4.0)
         self.publisher_ = self.create_publisher(BsplinePath, 'path', 10)
-        timer_period = 0.5  # seconds
+        timer_period = 0.02  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
     def get_circle(
