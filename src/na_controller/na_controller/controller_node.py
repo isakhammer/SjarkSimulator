@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import bisect
 import math
 import os
 
@@ -9,7 +8,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from ament_index_python.packages import get_package_share_directory
 
-from na_utils.bspline import build_spline_samples
+from na_utils.bspline import BSplinePath
 from na_utils.ros_params import load_ros_params
 from na_msg.msg import BsplinePath, ControllerState
 
@@ -24,7 +23,7 @@ class ControllerNode(Node):
             "sim_controller_params.yaml",
         )
         self.declare_parameter("config_path", default_config)
-        config_path = self.get_parameter("config_path").get_parameter_value().string_value
+        config_path = self.get_parameter("config_path").value
 
         defaults = {
             "path_topic": "/planner_ns/path",
@@ -51,7 +50,7 @@ class ControllerNode(Node):
         )
 
         # Subscriber: planner spline path
-        path_topic = self.get_parameter("path_topic").get_parameter_value().string_value
+        path_topic = self.get_parameter("path_topic").value
         self.path_sub = self.create_subscription(
             BsplinePath, path_topic, self.path_callback, 10
         )
@@ -63,12 +62,7 @@ class ControllerNode(Node):
         self.timer = self.create_timer(0.02, self.control_loop)
 
         self.state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # x,y,psi,u,v,r
-        self.control_points = []
-        self.start_u = 0.0
-        self.samples = []
-        self.sample_u = []
-        self.sample_s = []
-        self.spline_closed = True
+        self.spline = None
         self.get_logger().info("Boat LOS controller started")
 
     def state_callback(self, msg: Float32MultiArray) -> None:
@@ -79,25 +73,16 @@ class ControllerNode(Node):
         n = len(msg.ctrl_x)
         if n < 4 or n != len(msg.ctrl_y):
             self.get_logger().warn("Received invalid spline path")
-            self.control_points = []
-            self.samples = []
-            self.sample_u = []
-            self.sample_s = []
+            self.spline = None
             return
 
         new_points = [(msg.ctrl_x[i], msg.ctrl_y[i]) for i in range(n)]
-        samples = int(self.get_parameter("spline_samples").get_parameter_value().integer_value)
+        samples = int(self.get_parameter("spline_samples").value)
         if samples < 50:
             samples = 50
 
-        self.control_points = new_points
-        self.start_u = msg.start_u
-        self.spline_closed = bool(msg.closed)
-        self.samples, self.sample_u, self.sample_s = build_spline_samples(
-            self.control_points,
-            self.start_u,
-            samples,
-            closed=self.spline_closed,
+        self.spline = BSplinePath(
+            new_points, msg.start_u, samples, closed=bool(msg.closed)
         )
 
     def wrap_to_pi(self, angle: float) -> float:
@@ -106,7 +91,7 @@ class ControllerNode(Node):
     def control_loop(self) -> None:
         x, y, psi, _, _, r = self.state
 
-        if not self.samples:
+        if not self.spline or self.spline.empty():
             t_l = 0.0
             t_r = 0.0
             msg = Float32MultiArray()
@@ -114,69 +99,37 @@ class ControllerNode(Node):
             self.thrust_pub.publish(msg)
             return
 
-        lookahead = self.get_parameter("lookahead").get_parameter_value().double_value
-        m = len(self.samples)
-        best_idx = 0
-        best_d2 = float("inf")
-        for i in range(m):
-            dx = x - self.samples[i][0]
-            dy = y - self.samples[i][1]
-            d2 = dx * dx + dy * dy
-            if d2 < best_d2:
-                best_d2 = d2
-                best_idx = i
+        params = {
+            p.name: p.value
+            for p in self.get_parameters(
+                (
+                    "lookahead",
+                    "base_thrust",
+                    "heading_kp",
+                    "heading_kd",
+                    "max_thrust",
+                    "max_delta",
+                )
+            )
+        }
+        lookahead = float(params["lookahead"])
+        projection = self.spline.project(x, y)
+        if projection is None:
+            return
+        proj_x, proj_y = projection.point
+        cte = projection.cte
 
-        proj_x, proj_y = self.samples[best_idx]
-        if self.spline_closed:
-            prev_idx = best_idx - 1 if best_idx > 0 else m - 1
-            next_idx = best_idx + 1 if best_idx < m - 1 else 0
-        else:
-            prev_idx = max(0, best_idx - 1)
-            next_idx = min(m - 1, best_idx + 1)
-        tx = self.samples[next_idx][0] - self.samples[prev_idx][0]
-        ty = self.samples[next_idx][1] - self.samples[prev_idx][1]
-        t_norm = math.hypot(tx, ty)
-        if t_norm < 1e-6:
-            nx, ny = 0.0, 0.0
-        else:
-            tx /= t_norm
-            ty /= t_norm
-            nx, ny = -ty, tx
-
-        cte = (x - proj_x) * nx + (y - proj_y) * ny
-
-        total_length = self.sample_s[-1]
-        s_target = self.sample_s[best_idx] + lookahead
-        if self.spline_closed and s_target > total_length and total_length > 0.0:
-            s_target = s_target - total_length
-        elif not self.spline_closed:
-            s_target = min(s_target, total_length)
-
-        idx2 = bisect.bisect_left(self.sample_s, s_target)
-        if idx2 <= 0:
-            target_x, target_y = self.samples[0]
-        elif idx2 >= m:
-            target_x, target_y = self.samples[-1]
-        else:
-            s0 = self.sample_s[idx2 - 1]
-            s1 = self.sample_s[idx2]
-            if s1 - s0 < 1e-6:
-                alpha = 0.0
-            else:
-                alpha = (s_target - s0) / (s1 - s0)
-            x0, y0 = self.samples[idx2 - 1]
-            x1, y1 = self.samples[idx2]
-            target_x = x0 + alpha * (x1 - x0)
-            target_y = y0 + alpha * (y1 - y0)
+        target_t = self.spline.advance_t(projection.t, lookahead)
+        target_x, target_y = self.spline.point_at_t(target_t)
 
         desired = math.atan2(target_y - y, target_x - x)
         err = self.wrap_to_pi(desired - psi)
 
-        base_thrust = self.get_parameter("base_thrust").get_parameter_value().double_value
-        heading_kp = self.get_parameter("heading_kp").get_parameter_value().double_value
-        heading_kd = self.get_parameter("heading_kd").get_parameter_value().double_value
-        max_thrust = self.get_parameter("max_thrust").get_parameter_value().double_value
-        max_delta = self.get_parameter("max_delta").get_parameter_value().double_value
+        base_thrust = float(params["base_thrust"])
+        heading_kp = float(params["heading_kp"])
+        heading_kd = float(params["heading_kd"])
+        max_thrust = float(params["max_thrust"])
+        max_delta = float(params["max_delta"])
 
         delta = heading_kp * err - heading_kd * r
         delta = max(-max_delta, min(max_delta, delta))
