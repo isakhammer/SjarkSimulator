@@ -39,11 +39,25 @@ class BSplinePath:
         closed: bool = True,
     ) -> None:
         self.control_points = list(control_points)
+        self.start_u = start_u
         self.closed = closed
         self.points, self.u, self.t = build_spline_samples(
             self.control_points, start_u, samples, closed=closed
         )
         self.length = self.t[-1] if self.t else 0.0
+
+    @classmethod
+    def from_control_points(
+        cls,
+        control_points: Sequence[Tuple[float, float]],
+        samples: int = 400,
+        closed: bool = True,
+        start_u: float | None = None,
+    ) -> "BSplinePath":
+        """Build a path and choose a default start_u when none is provided."""
+        if start_u is None:
+            start_u = find_start_u(control_points, samples=samples) if closed else 0.0
+        return cls(control_points, start_u, samples, closed=closed)
 
     def empty(self) -> bool:
         """Return True if no samples were generated."""

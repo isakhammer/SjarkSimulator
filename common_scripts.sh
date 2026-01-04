@@ -5,8 +5,9 @@ source /root/code/install/setup.bash
 alias so='source /root/.bashrc'
 alias colb='colcon build --symlink-install'
 # alias cb='colcon build'
-alias pyfast='pytest src --import-mode=importlib --ignore=src/na_launch/test --ignore=src/na_sim/test --ignore=src/na_planner/test --ignore=src/na_viz/test'
-alias cbb='cd /root/code/ && pyfast && colcon build && so'
+alias pyfast='cd /root/code/src/na_utils && pytest test'
+# TODO: Add a separate alias to run pytest across all ROS 2 packages.
+alias cbb='cd /root/code/ && colcon build && pyfast && so'
 
 
 alias colc='colcon build --packages-select cpp_pubsub'

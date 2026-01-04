@@ -1,18 +1,18 @@
-import rclpy
-import numpy as np
-from rclpy.node import Node
-
-from na_utils.bspline import find_start_u
 from na_msg.msg import BsplinePath
+from na_utils.bspline import BSplinePath
+import numpy as np
+import rclpy
+from rclpy.node import Node
 
 
 class PlannerPublisher(Node):
+    """Publish a simple circular B-spline path."""
+
     def __init__(self):
         super().__init__('planner_publisher')
         self.publisher_ = self.create_publisher(BsplinePath, 'path', 10)
         timer_period = 0.5  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
-        self.i = 0
 
     def build_circle_path(
         self,
@@ -27,8 +27,8 @@ class PlannerPublisher(Node):
             (cx + radius * np.cos(a), cy + radius * np.sin(a))
             for a in angles
         ]
-        start_u = find_start_u(control)
-        return control, start_u
+        path = BSplinePath.from_control_points(control, samples=400, closed=True)
+        return path.control_points, path.start_u
 
     def timer_callback(self):
         msg = BsplinePath()
@@ -42,7 +42,6 @@ class PlannerPublisher(Node):
         msg.start_u = float(start_u)
 
         self.publisher_.publish(msg)
-        self.i += 1
 
 
 def main(args=None):
