@@ -45,17 +45,8 @@ class BoatSimNode(Node):
         for name, value in defaults.items():
             self.declare_parameter(name, value)
 
-        params = {
-            "m": self.get_parameter("m").get_parameter_value().double_value,
-            "Iz": self.get_parameter("Iz").get_parameter_value().double_value,
-            "Xu": self.get_parameter("Xu").get_parameter_value().double_value,
-            "Xuu": self.get_parameter("Xuu").get_parameter_value().double_value,
-            "Yv": self.get_parameter("Yv").get_parameter_value().double_value,
-            "Yr": self.get_parameter("Yr").get_parameter_value().double_value,
-            "Nv": self.get_parameter("Nv").get_parameter_value().double_value,
-            "Nr": self.get_parameter("Nr").get_parameter_value().double_value,
-            "l": self.get_parameter("l").get_parameter_value().double_value,
-        }
+        param_names = ("m", "Iz", "Xu", "Xuu", "Yv", "Yr", "Nv", "Nr", "l")
+        params = {name: float(self.get_parameter(name).value) for name in param_names}
 
         self.sim = Boat3DOF(params)
 
@@ -79,7 +70,7 @@ class BoatSimNode(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
 
         # Time step
-        self.dt = self.get_parameter("dt").get_parameter_value().double_value
+        self.dt = float(self.get_parameter("dt").value)
         self.timer = self.create_timer(self.dt, self.update)
 
         self.get_logger().info("Boat 3DOF simulator with Odometry started.")
