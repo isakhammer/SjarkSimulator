@@ -1,5 +1,5 @@
 
-IMAGE_NAME="ros2-kilted-base:latest"
+IMAGE_NAME="nautomatica-base:latest"
 
 function run_docker()  {
   image_name=$IMAGE_NAME

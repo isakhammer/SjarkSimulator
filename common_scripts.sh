@@ -11,6 +11,7 @@ alias pyfast='cd /root/code/src/na_utils && pytest test'
 alias cb='cd /root/code/ && colcon build --symlink-install && so'
 alias cbb='cd /root/code/ && colcon build --symlink-install && pyfast && so'
 alias cbbb='cd /root/code/ && rm -rf build install log src/*/build src/*/install src/*/log && colcon build --symlink-install && pyfast && so'
+alias clean_ws='cd /root/code/ && rm -rf build install log src/*/build src/*/install src/*/log'
 
 
 alias colc='colcon build --packages-select cpp_pubsub'
