@@ -30,7 +30,7 @@ RUN apt-get update && \
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 
-# 2) Install ros2-apt-source (adds ROS 2 Kilted repository)
+# 2) Install ros2-apt-source (adds ROS 2 repository)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '{print $4}') && \
@@ -40,8 +40,7 @@ RUN apt-get update && \
     rm /tmp/ros2-apt-source.deb && \
     rm -rf /var/lib/apt/lists/*
 
-# 3) Install dev tools and ROS 2 Kilted (desktop variant)
-#    For bare-bones instead of desktop, replace ros-kilted-desktop with ros-kilted-ros-base
+# 3) Install dev tools and ROS 2 (desktop variant)
 # Set ROS 2 distro
 ARG ROS_DISTRO=jazzy
 ENV ROS_DISTRO=${ROS_DISTRO}
@@ -77,6 +76,7 @@ RUN rosdep init && \
 
 
 # 4) Make every interactive shell source ROS and your workspace helpers
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 RUN echo "source /root/code/common_scripts.sh" >> /root/.bashrc
 RUN . /root/.bashrc
 
