@@ -1,5 +1,4 @@
 
-source /opt/ros/kilted/setup.bash
 source /root/code/install/setup.bash
 
 alias so='source /root/.bashrc'
