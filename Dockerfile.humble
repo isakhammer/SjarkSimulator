@@ -14,14 +14,13 @@ RUN git clone https://github.com/PlotJuggler/plotjuggler-ros-plugins.git
 
 WORKDIR /opt/ws_plotjuggler
 RUN rosdep update && rosdep install -y --from-paths src --ignore-src
-#RUN colcon build
-#
-#
-#RUN mkdir -p /root/code
+
+
+SHELL ["/bin/bash", "-c"]
+RUN source /opt/ros/humble/setup.bash && colcon build
+
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
-#RUN . /root/.bashrc
-#
-RUN echo "source /opt/ws_plotjuggler/src/install/setup.sh" >> /root/.bashrc
+RUN echo "source /opt/ws_plotjuggler/install/setup.sh" >> /root/.bashrc
 RUN echo "source /root/code/common_scripts.sh" >> /root/.bashrc
 WORKDIR /root/code
 COPY . .
