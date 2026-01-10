@@ -1,2 +1,2 @@
 
-docker build -t "nautomatic-base" .
+docker build -t "nautomatica-base" .
