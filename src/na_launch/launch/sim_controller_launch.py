@@ -10,6 +10,16 @@ def generate_launch_description():
     pkg_path = '/root/code/src/na_launch'
     #pkg_path = get_package_share_directory('na_launch')
 
+    # Prefer system QT_* overrides but default to HiDPI-safe scaling.
+    plotjuggler_env = {
+        'QT_ENABLE_HIGHDPI_SCALING': os.environ.get('QT_ENABLE_HIGHDPI_SCALING', '1'),
+        'QT_AUTO_SCREEN_SCALE_FACTOR': os.environ.get('QT_AUTO_SCREEN_SCALE_FACTOR', '1'),
+    }
+    if 'QT_SCALE_FACTOR' in os.environ:
+        plotjuggler_env['QT_SCALE_FACTOR'] = os.environ['QT_SCALE_FACTOR']
+    if 'QT_SCREEN_SCALE_FACTORS' in os.environ:
+        plotjuggler_env['QT_SCREEN_SCALE_FACTORS'] = os.environ['QT_SCREEN_SCALE_FACTORS']
+
     return LaunchDescription([
         Node(
             package='na_controller',
@@ -47,9 +57,6 @@ def generate_launch_description():
             executable='plotjuggler',
             name='plotjuggler',
             output='screen',
-            additional_env={
-                'QT_AUTO_SCREEN_SCALE_FACTOR': '2',
-                'QT_SCALE_FACTOR': '0',
-            },
+            additional_env=plotjuggler_env,
         )
     ])
