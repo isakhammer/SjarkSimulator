@@ -5,10 +5,10 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
 
-    #TODO: find correct function to avoid hardcoding  
-
+    # Prefer installed package share, but fall back to the source tree.
+    # pkg_path = get_package_share_directory('na_launch')
+    # pkg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     pkg_path = '/root/code/src/na_launch'
-    #pkg_path = get_package_share_directory('na_launch')
 
     # Prefer system QT_* overrides but default to HiDPI-safe scaling.
     plotjuggler_env = {
@@ -19,6 +19,8 @@ def generate_launch_description():
         plotjuggler_env['QT_SCALE_FACTOR'] = os.environ['QT_SCALE_FACTOR']
     if 'QT_SCREEN_SCALE_FACTORS' in os.environ:
         plotjuggler_env['QT_SCREEN_SCALE_FACTORS'] = os.environ['QT_SCREEN_SCALE_FACTORS']
+
+    plotjuggler_layout = os.path.join(pkg_path, 'plot_juggler', 'default.xml')
 
     return LaunchDescription([
         Node(
@@ -57,6 +59,7 @@ def generate_launch_description():
             executable='plotjuggler',
             name='plotjuggler',
             output='screen',
+            arguments=['-l', plotjuggler_layout],
             additional_env=plotjuggler_env,
         )
     ])
