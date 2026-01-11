@@ -48,7 +48,7 @@ def generate_launch_description():
             name='plotjuggler',
             output='screen',
             additional_env={
-                'QT_AUTO_SCREEN_SCALE_FACTOR': '0',
+                'QT_AUTO_SCREEN_SCALE_FACTOR': '1',
                 'QT_SCALE_FACTOR': '1',
             },
         )
