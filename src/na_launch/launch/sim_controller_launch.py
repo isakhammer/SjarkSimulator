@@ -35,11 +35,21 @@ def generate_launch_description():
             executable='viz_node',
             name='viz_node'
         ),
-         Node(
-           package='rviz2',
-           executable='rviz2',
-           name="rviz2",
-           output='screen',
-           arguments=['-d', os.path.join(pkg_path, 'rviz', 'default.rviz')]
-         )
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name="rviz2",
+            output='screen',
+            arguments=['-d', os.path.join(pkg_path, 'rviz', 'default.rviz')]
+        ),
+        Node(
+            package='plotjuggler',
+            executable='plotjuggler',
+            name='plotjuggler',
+            output='screen',
+            additional_env={
+                'QT_AUTO_SCREEN_SCALE_FACTOR': '0',
+                'QT_SCALE_FACTOR': '1',
+            },
+        )
     ])
