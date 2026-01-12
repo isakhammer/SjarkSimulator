@@ -5,8 +5,9 @@ from nav_msgs.msg import Odometry, Path
 
 from na_utils.bspline import eval_bspline, samples_from_density
 from na_msg.msg import BsplinePath, ControllerState
-from geometry_msgs.msg import PoseStamped, Point
+from geometry_msgs.msg import PoseStamped, Point, TransformStamped
 from visualization_msgs.msg import Marker
+from tf2_ros import TransformBroadcaster
 
 import numpy as np
 
@@ -15,6 +16,10 @@ class BoatVisualizer(Node):
     def __init__(self):
         super().__init__("boat_visualizer")
         self.declare_parameter("samples_per_meter", 4.0)
+        self.declare_parameter("map_frame", "map")
+        self.declare_parameter("frenet_frame", "path_frenet")
+        self.map_frame = str(self.get_parameter("map_frame").value)
+        self.frenet_frame = str(self.get_parameter("frenet_frame").value)
 
         # Subscriptions
         self.sub_odom = self.create_subscription(
@@ -31,6 +36,9 @@ class BoatVisualizer(Node):
         self.pub_planner_path = self.create_publisher(Marker, "/viz/path", 10)
         self.pub_cte = self.create_publisher(Marker, "/viz/cte", 10)
         self.pub_los_target = self.create_publisher(Marker, "/viz/los_target", 10)
+
+        # TF broadcaster for projection frame
+        self.tf_broadcaster = TransformBroadcaster(self)
 
         # Internal path storage
         self.path_trace = Path()
@@ -112,6 +120,7 @@ class BoatVisualizer(Node):
         self.publish_heading_arrow(msg)
 
     def controller_state_cb(self, msg):
+        self.publish_frenet_from_state(msg)
         if self.last_pose is None:
             return
 
@@ -162,6 +171,22 @@ class BoatVisualizer(Node):
         m.points.append(p1)
 
         self.pub_cte.publish(m)
+
+    def publish_frenet_from_state(self, msg):
+        yaw = float(msg.proj_yaw)
+        qz = float(np.sin(yaw / 2.0))
+        qw = float(np.cos(yaw / 2.0))
+
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = self.map_frame
+        t.child_frame_id = self.frenet_frame
+        t.transform.translation.x = float(msg.proj_x)
+        t.transform.translation.y = float(msg.proj_y)
+        t.transform.translation.z = 0.0
+        t.transform.rotation.z = qz
+        t.transform.rotation.w = qw
+        self.tf_broadcaster.sendTransform(t)
 
     # --------------------------------------------------------
     # BOAT MARKER (cube hull)

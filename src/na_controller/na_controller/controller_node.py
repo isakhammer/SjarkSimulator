@@ -127,6 +127,11 @@ class ControllerNode(Node):
             return
         proj_x, proj_y = projection.point
         cte = projection.cte
+        tx, ty = projection.tangent
+        if abs(tx) < 1e-6 and abs(ty) < 1e-6:
+            proj_yaw = 0.0
+        else:
+            proj_yaw = math.atan2(ty, tx)
 
         target_t = self.spline.advance_t(projection.t, lookahead)
         target_x, target_y = self.spline.point_at_t(target_t)
@@ -155,6 +160,7 @@ class ControllerNode(Node):
         state_msg.target_y = float(target_y)
         state_msg.proj_x = float(proj_x)
         state_msg.proj_y = float(proj_y)
+        state_msg.proj_yaw = float(proj_yaw)
         self.state_pub.publish(state_msg)
 
         msg = Float32MultiArray()
