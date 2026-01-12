@@ -1,28 +1,28 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <root>
- <tabbed_widget parent="main_window" name="Main Window">
+ <tabbed_widget name="Main Window" parent="main_window">
   <Tab tab_name="tab1" containers="1">
    <Container>
-    <DockSplitter orientation="-" sizes="0.333566;0.332868;0.333566" count="3">
+    <DockSplitter orientation="-" count="3" sizes="0.333588;0.332824;0.333588">
      <DockArea name="...">
-      <plot flip_x="false" mode="TimeSeries" line_width="1.0" flip_y="false">
-       <range top="1.240085" right="108.521992" left="103.539745" bottom="-4.372207"/>
+      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
+       <range top="0.973561" right="8.620449" bottom="-4.379616" left="3.639583"/>
        <limitY/>
        <curve name="/controller_ns/controller_state/heading_error" color="#1f77b4"/>
        <curve name="/controller_ns/controller_state/cte" color="#d62728"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot flip_x="false" mode="TimeSeries" line_width="1.0" flip_y="false">
-       <range top="25.305851" right="108.521992" left="103.539745" bottom="4.694148"/>
+      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
+       <range top="30.750000" right="8.620449" bottom="-0.750000" left="3.639583"/>
        <limitY/>
        <curve name="/cmd_thrust/data[0]" color="#1ac938"/>
        <curve name="/cmd_thrust/data[1]" color="#ff7f0e"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot flip_x="false" mode="TimeSeries" line_width="1.0" flip_y="false">
-       <range top="1.000000" right="1.000000" left="0.000000" bottom="0.000000"/>
+      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
+       <range top="1.000000" right="1.000000" bottom="0.000000" left="0.000000"/>
        <limitY/>
       </plot>
      </DockArea>
@@ -31,10 +31,10 @@
   </Tab>
   <Tab tab_name="tab2" containers="1">
    <Container>
-    <DockSplitter orientation="-" sizes="1" count="1">
+    <DockSplitter orientation="-" count="1" sizes="1">
      <DockArea name="...">
-      <plot flip_x="false" mode="TimeSeries" line_width="1.0" flip_y="false">
-       <range top="1.000000" right="1.000000" left="0.000000" bottom="0.000000"/>
+      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
+       <range top="1.000000" right="1.000000" bottom="0.000000" left="0.000000"/>
        <limitY/>
       </plot>
      </DockArea>
@@ -48,7 +48,7 @@
  <!-- - - - - - - - - - - - - - - -->
  <Plugins>
   <plugin ID="DataLoad CSV">
-   <parameters delimiter="0" time_axis=""/>
+   <parameters time_axis="" delimiter="0"/>
   </plugin>
   <plugin ID="DataLoad MCAP"/>
   <plugin ID="DataLoad ROS2 bags">
@@ -81,7 +81,7 @@
   <plugin ID="CSV Exporter"/>
   <plugin ID="ROS2 Topic Re-Publisher"/>
   <plugin ID="Video Viewer">
-   <config use_frame="true" video_file="" curve_name=""/>
+   <config curve_name="" use_frame="true" video_file=""/>
   </plugin>
  </Plugins>
  <!-- - - - - - - - - - - - - - - -->
