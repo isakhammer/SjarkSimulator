@@ -1,5 +1,6 @@
 import os
 from launch import LaunchDescription
+from launch.actions import TimerAction
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
@@ -22,6 +23,13 @@ def generate_launch_description():
 
     plotjuggler_layout = os.path.join(pkg_path, 'plot_juggler', 'default.xml')
 
+    sim_node = Node(
+        package='na_sim',
+        namespace='sim_ns',
+        executable='sim_node',
+        name='sim_node',
+    )
+
     return LaunchDescription([
         Node(
             package='na_controller',
@@ -29,11 +37,9 @@ def generate_launch_description():
             executable='controller_node',
             name='controller_node',
         ),
-        Node(
-            package='na_sim',
-            namespace='sim_ns',
-            executable='sim_node',
-            name='sim_node',
+        TimerAction(
+            period=3.0,
+            actions=[sim_node],
         ),
         Node(
             package='na_planner',
