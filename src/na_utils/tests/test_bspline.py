@@ -1,6 +1,12 @@
 import math
+import time
 
-from na_utils.bspline import BSplinePath, build_spline_samples, eval_bspline
+from na_utils.bspline import (
+    BSplinePath,
+    build_spline_samples,
+    eval_bspline,
+    eval_bspline_derivative,
+)
 
 
 def test_eval_bspline_returns_point():
@@ -12,7 +18,9 @@ def test_eval_bspline_returns_point():
 
 def test_build_spline_samples_monotonic_arc():
     control = [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]
-    points, params, arc = build_spline_samples(control, start_u=0.0, samples=50, closed=True)
+    points, params, arc = build_spline_samples(
+        control, start_u=0.0, samples=50, closed=True
+    )
 
     assert len(points) == 50
     assert len(params) == 50
@@ -62,3 +70,77 @@ def test_bspline_path_advance_t_wraps_and_clamps():
 
     clamped = open_path.advance_t(open_path.length - 0.1, 0.2)
     assert math.isclose(clamped, open_path.length, abs_tol=1e-6)
+
+
+def test_bspline_projection_accuracy_cm():
+    control = [
+        (0.0, 0.0),
+        (4.0, 1.0),
+        (6.0, 4.0),
+        (4.0, 7.0),
+        (0.0, 6.0),
+        (-2.0, 3.0),
+    ]
+    path = BSplinePath(control, start_u=0.0, samples=800, closed=True)
+    offset = 1.0
+    checked = 0
+    max_err = 0.0
+    max_cte = 0.0
+
+    n = len(control)
+    for k in range(40):
+        u = (n * k) / 40.0
+        x, y = eval_bspline(control, u)
+        dx, dy = eval_bspline_derivative(control, u)
+        norm = math.hypot(dx, dy)
+        if norm < 1e-6:
+            continue
+        nx, ny = -dy / norm, dx / norm
+        qx, qy = x + nx * offset, y + ny * offset
+        proj = path.project(qx, qy)
+        assert proj is not None
+        err = math.hypot(proj.point[0] - x, proj.point[1] - y)
+        max_err = max(max_err, err)
+        max_cte = max(max_cte, abs(abs(proj.cte) - offset))
+        checked += 1
+
+    assert checked > 0
+    assert max_err <= 0.01
+    assert max_cte <= 0.01
+
+
+def test_bspline_projection_performance_budget():
+    control = [
+        (0.0, 0.0),
+        (4.0, 1.0),
+        (6.0, 4.0),
+        (4.0, 7.0),
+        (0.0, 6.0),
+        (-2.0, 3.0),
+    ]
+    path = BSplinePath(control, start_u=0.0, samples=1600, closed=True)
+    n = len(control)
+    points = []
+    for k in range(100):
+        u = (n * k) / 100.0
+        x, y = eval_bspline(control, u)
+        dx, dy = eval_bspline_derivative(control, u)
+        norm = math.hypot(dx, dy)
+        if norm < 1e-6:
+            continue
+        nx, ny = -dy / norm, dx / norm
+        points.append((x + nx * 2.0, y + ny * 2.0))
+
+    assert points
+    for x, y in points[:10]:
+        path.project(x, y)
+
+    loops = 10
+    start = time.perf_counter()
+    for _ in range(loops):
+        for x, y in points:
+            path.project(x, y)
+    elapsed = time.perf_counter() - start
+    per_call = elapsed / (len(points) * loops)
+
+    assert per_call <= 0.0005, f"avg {per_call * 1000:.3f}ms"

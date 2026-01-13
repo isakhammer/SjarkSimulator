@@ -37,6 +37,9 @@ class BSplinePath:
         start_u: float,
         samples: int,
         closed: bool = True,
+        refine_iters: int = 5,
+        refine_tol: float = 1e-4,
+        refine_max_step: float = 0.5,
     ) -> None:
         self.control_points = list(control_points)
         self.start_u = start_u
@@ -45,6 +48,11 @@ class BSplinePath:
             self.control_points, start_u, samples, closed=closed
         )
         self.length = self.t[-1] if self.t else 0.0
+        self.u_start = self.u[0] if self.u else 0.0
+        self.u_end = self.u[-1] if self.u else 0.0
+        self.refine_iters = max(0, int(refine_iters))
+        self.refine_tol = float(refine_tol)
+        self.refine_max_step = float(refine_max_step)
 
     @classmethod
     def from_control_points(
@@ -53,11 +61,22 @@ class BSplinePath:
         samples: int = 400,
         closed: bool = True,
         start_u: float | None = None,
+        refine_iters: int = 5,
+        refine_tol: float = 1e-4,
+        refine_max_step: float = 0.5,
     ) -> "BSplinePath":
         """Build a path and choose a default start_u when none is provided."""
         if start_u is None:
             start_u = find_start_u(control_points, samples=samples) if closed else 0.0
-        return cls(control_points, start_u, samples, closed=closed)
+        return cls(
+            control_points,
+            start_u,
+            samples,
+            closed=closed,
+            refine_iters=refine_iters,
+            refine_tol=refine_tol,
+            refine_max_step=refine_max_step,
+        )
 
     def empty(self) -> bool:
         """Return True if no samples were generated."""
@@ -82,8 +101,62 @@ class BSplinePath:
         ty /= t_norm
         return (tx, ty), (-ty, tx)
 
+    def _wrap_u(self, u: float) -> float:
+        if not self.u:
+            return u
+        if self.closed:
+            span = self.u_end - self.u_start
+            if span <= 0.0:
+                return u
+            return ((u - self.u_start) % span) + self.u_start
+        return max(self.u_start, min(self.u_end, u))
+
+    def _arc_length_at_u(self, u: float) -> float:
+        if not self.t or not self.u:
+            return 0.0
+        idx = bisect.bisect_left(self.u, u)
+        if idx <= 0:
+            return self.t[0]
+        if idx >= len(self.u):
+            return self.t[-1]
+        u0 = self.u[idx - 1]
+        u1 = self.u[idx]
+        t0 = self.t[idx - 1]
+        t1 = self.t[idx]
+        if abs(u1 - u0) < 1e-9:
+            return t0
+        alpha = (u - u0) / (u1 - u0)
+        return t0 + alpha * (t1 - t0)
+
+    def _tangent_normal_at_u(
+        self, u: float, fallback_idx: int
+    ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+        dx, dy = eval_bspline_derivative(self.control_points, u)
+        t_norm = math.hypot(dx, dy)
+        if t_norm < 1e-6:
+            return self._tangent_normal(fallback_idx)
+        tx = dx / t_norm
+        ty = dy / t_norm
+        return (tx, ty), (-ty, tx)
+
+    def _refine_u(self, x: float, y: float, u: float) -> float:
+        u = self._wrap_u(u)
+        for _ in range(self.refine_iters):
+            px, py = eval_bspline(self.control_points, u)
+            dx, dy = eval_bspline_derivative(self.control_points, u)
+            denom = dx * dx + dy * dy
+            if denom < 1e-12:
+                break
+            du = ((x - px) * dx + (y - py) * dy) / denom
+            if abs(du) < self.refine_tol:
+                break
+            if self.refine_max_step > 0.0:
+                du = max(-self.refine_max_step, min(self.refine_max_step, du))
+            u = self._wrap_u(u + du)
+        return u
+
     def project(self, x: float, y: float) -> SplineProjection | None:
-        """Project a point onto the sampled spline (nearest sample)."""
+        """Project a point onto the sampled spline (nearest sample + refine)."""
         if not self.points:
             return None
         best_idx = 0
@@ -95,10 +168,13 @@ class BSplinePath:
             if d2 < best_d2:
                 best_d2 = d2
                 best_idx = i
-        proj_x, proj_y = self.points[best_idx]
-        tangent, normal = self._tangent_normal(best_idx)
+        u = self.u[best_idx] if self.u else 0.0
+        if self.refine_iters > 0:
+            u = self._refine_u(x, y, u)
+        proj_x, proj_y = eval_bspline(self.control_points, u)
+        tangent, normal = self._tangent_normal_at_u(u, best_idx)
         cte = (x - proj_x) * normal[0] + (y - proj_y) * normal[1]
-        t = self.t[best_idx] if self.t else 0.0
+        t = self._arc_length_at_u(u)
         return SplineProjection(
             index=best_idx,
             point=(proj_x, proj_y),
@@ -172,6 +248,28 @@ def eval_bspline(control_points, u):
 
     x = b0 * p0[0] + b1 * p1[0] + b2 * p2[0] + b3 * p3[0]
     y = b0 * p0[1] + b1 * p1[1] + b2 * p2[1] + b3 * p3[1]
+    return (x, y)
+
+
+def eval_bspline_derivative(control_points, u):
+    n = len(control_points)
+    if n < 4:
+        return (0.0, 0.0)
+
+    i = int(math.floor(u)) % n
+    t = u - math.floor(u)
+    p0 = control_points[(i - 1) % n]
+    p1 = control_points[i % n]
+    p2 = control_points[(i + 1) % n]
+    p3 = control_points[(i + 2) % n]
+
+    db0 = (-3.0 * t * t + 6.0 * t - 3.0) / 6.0
+    db1 = (9.0 * t * t - 12.0 * t) / 6.0
+    db2 = (-9.0 * t * t + 6.0 * t + 3.0) / 6.0
+    db3 = (3.0 * t * t) / 6.0
+
+    x = db0 * p0[0] + db1 * p1[0] + db2 * p2[0] + db3 * p3[0]
+    y = db0 * p0[1] + db1 * p1[1] + db2 * p2[1] + db3 * p3[1]
     return (x, y)
 
 
