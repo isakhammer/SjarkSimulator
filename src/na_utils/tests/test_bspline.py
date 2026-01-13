@@ -40,7 +40,8 @@ def test_bspline_path_project_on_sample():
 
     assert proj is not None
     assert proj.index == idx
-    assert proj.point == (px, py)
+    assert math.isclose(proj.point[0], px, abs_tol=1e-6)
+    assert math.isclose(proj.point[1], py, abs_tol=1e-6)
     assert math.isclose(proj.cte, 0.0, abs_tol=1e-6)
     assert math.isclose(math.hypot(*proj.tangent), 1.0, rel_tol=1e-3)
     assert math.isclose(math.hypot(*proj.normal), 1.0, rel_tol=1e-3)
@@ -70,6 +71,14 @@ def test_bspline_path_advance_t_wraps_and_clamps():
 
     clamped = open_path.advance_t(open_path.length - 0.1, 0.2)
     assert math.isclose(clamped, open_path.length, abs_tol=1e-6)
+
+
+def test_bspline_sample_at_t_unit_tangent():
+    control = [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]
+    path = BSplinePath(control, start_u=0.0, samples=50, closed=True)
+
+    sample = path.sample_at_t(path.t[10])
+    assert math.isclose(math.hypot(*sample.tangent), 1.0, rel_tol=1e-3)
 
 
 def test_bspline_projection_accuracy_cm():

@@ -64,6 +64,7 @@ class ControllerNode(Node):
 
         self.state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # x,y,psi,u,v,r
         self.spline = None
+        self.last_proj_t = None
         self.get_logger().info("Boat LOS controller started")
 
     def state_callback(self, msg: Float32MultiArray) -> None:
@@ -75,6 +76,7 @@ class ControllerNode(Node):
         if n < 4 or n != len(msg.ctrl_y):
             self.get_logger().warn("Received invalid spline path")
             self.spline = None
+            self.last_proj_t = None
             return
 
         new_points = [(msg.ctrl_x[i], msg.ctrl_y[i]) for i in range(n)]
@@ -93,6 +95,7 @@ class ControllerNode(Node):
         self.spline = BSplinePath(
             new_points, msg.start_u, samples, closed=bool(msg.closed)
         )
+        self.last_proj_t = None
 
     def wrap_to_pi(self, angle: float) -> float:
         return (angle + math.pi) % (2.0 * math.pi) - math.pi
@@ -122,19 +125,22 @@ class ControllerNode(Node):
             )
         }
         lookahead = float(params["lookahead"])
-        projection = self.spline.project(x, y)
+        projection = self.spline.project(x, y, hint_t=self.last_proj_t)
         if projection is None:
             return
-        proj_x, proj_y = projection.point
+        self.last_proj_t = projection.t
+        proj_sample = self.spline.sample_at_t(projection.t)
+        proj_x, proj_y = proj_sample.point
         cte = projection.cte
-        tx, ty = projection.tangent
+        tx, ty = proj_sample.tangent
         if abs(tx) < 1e-6 and abs(ty) < 1e-6:
             proj_yaw = 0.0
         else:
             proj_yaw = math.atan2(ty, tx)
 
         target_t = self.spline.advance_t(projection.t, lookahead)
-        target_x, target_y = self.spline.point_at_t(target_t)
+        target_sample = self.spline.sample_at_t(target_t)
+        target_x, target_y = target_sample.point
 
         desired = math.atan2(target_y - y, target_x - x)
         err = self.wrap_to_pi(desired - psi)
