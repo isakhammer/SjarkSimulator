@@ -3,5 +3,6 @@
 **/build/
 **/install/
 **/log/
+.agent_md/
 
 **/__pycache__/
