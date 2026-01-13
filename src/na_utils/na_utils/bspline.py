@@ -10,6 +10,22 @@ Typical usage:
     proj = path.project(x, y)
     target_t = path.advance_t(proj.t, lookahead_m)
     target_x, target_y = path.point_at_t(target_t)
+
+Projection example:
+    control = [
+        (0.0, 0.0),
+        (4.0, 1.0),
+        (6.0, 4.0),
+        (4.0, 7.0),
+        (0.0, 6.0),
+        (-2.0, 3.0),
+    ]
+    path = BSplinePath(control, start_u=0.0, samples=400, closed=True)
+    proj = path.project(2.0, 1.5)
+    if proj is not None:
+        print("projection:", proj.point)
+        print("cte:", proj.cte)
+        print("tangent:", proj.tangent)
 """
 
 import bisect
