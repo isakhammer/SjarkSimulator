@@ -12,6 +12,12 @@ alias cbb='cd /root/code/ && colcon build --symlink-install && pyfast && so'
 alias cbbb='cd /root/code/ && rm -rf build install log src/*/build src/*/install src/*/log && colcon build --symlink-install && pyfast && so'
 alias clean_ws='cd /root/code/ && rm -rf build install log src/*/build src/*/install src/*/log'
 
+ct() {
+  cd /root/code/
+  colcon test
+  colcon test-result --verbose
+}
+
 
 alias colc='colcon build --packages-select cpp_pubsub'
 alias install_setup='. install/setup.bash' # do research when to do this.
