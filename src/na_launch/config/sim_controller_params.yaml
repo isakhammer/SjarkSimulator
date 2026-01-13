@@ -7,7 +7,6 @@ controller_node:
     heading_kd: 10.0
     max_thrust: 30.0
     max_delta: 15.0
-    spline_samples: 400
     samples_per_meter: 4.0
 
 sim_node:

@@ -2,9 +2,11 @@
 Minimal uniform cubic B-spline utilities.
 
 Key idea:
+- The spline uses a native parameter `u` (knot index + local offset). `u` is
+  unitless, not in meters, and treated as a private internal parameter.
 - The spline is sampled into points with an arc-length parameter `t` in meters.
-- `BSplinePath` keeps those samples and provides projection and lookahead
-  helpers.
+- `BSplinePath` keeps both `u` and `t` samples and provides projection and
+  lookahead helpers.
 
 Typical usage:
     path = BSplinePath(ctrl_pts, start_u=0.0, samples=400, closed=True)
@@ -27,6 +29,55 @@ Projection example:
         print("projection:", proj.point)
         print("cte:", proj.cte)
         print("tangent:", proj.tangent)
+
+B-spline utilities:
+    `BSplinePath` builds a sampled, arc-length parameterized spline and provides
+    projection and lookahead helpers. The spline is stored as:
+    - points: sampled (x, y) points.
+    - u: unitless spline parameter values for each sample (private internal
+      parameter, not meters).
+    - t: arc-length parameter values for each sample (meters).
+
+Projection and Frenet frame:
+    `BSplinePath.project(x, y)` maps a point onto the spline and returns a
+    `SplineProjection` with the projection point and a local Frenet frame:
+    - tangent: unit tangent along the spline.
+    - normal: unit normal (perpendicular to the tangent).
+    - cte: signed lateral error = dot((x - proj_x, y - proj_y), normal).
+
+    `BSplinePath.sample_at_t(t)` evaluates the spline at arc-length t and
+    returns position, tangent, normal, and curvature (second derivative with
+    respect to arc length).
+
+    The implementation keeps a sampled u ↔ t lookup table so it can:
+    - map a projection's u to t (meters), and
+    - map a desired t back to u for evaluation.
+
+    The projection uses a two-step approach:
+    1) Coarse nearest-sample search to get an initial spline parameter u.
+    2) A short Gauss-Newton style refinement along the tangent direction:
+       du = dot((x - px, y - py), dC/du) / dot(dC/du, dC/du)
+       with configurable iteration count, tolerance, and max step size.
+
+    This keeps the projection fast while remaining accurate at the centimeter
+    scale. The nearest-sample lookup acts as the initial guess; for sequential
+    queries you can reuse the last projection t to reduce work further.
+
+Tuning knobs (constructor args):
+    - refine_iters: number of refinement iterations (default 5).
+    - refine_tol: convergence threshold for du (default 1e-4).
+    - refine_max_step: clamps each iteration (default 0.5).
+
+Tests:
+    `src/na_utils/tests/test_bspline.py` includes:
+    - Accuracy: project points offset by 1 m along the normal and assert the
+      projection point and cte are within 0.01 m.
+    - Performance: average projection time stays below 0.5 ms per call in a
+      "worst-case" 1600-sample path.
+
+    Run via:
+    - ct for full workspace verification.
+    - colcon test --packages-select na_utils for this package only.
 """
 
 import bisect
@@ -55,7 +106,7 @@ class SplineSample:
 
 
 class BSplinePath:
-    """Sampled spline representation with arc-length parameter `t`."""
+    """Sampled spline with arc-length `t` (meters) and native parameter `u`."""
 
     def __init__(
         self,
@@ -70,6 +121,7 @@ class BSplinePath:
         self.control_points = list(control_points)
         self.start_u = start_u
         self.closed = closed
+        # `u` is the spline parameter; `t` is the arc-length (meters) at each `u`.
         self.points, self.u, self.t = build_spline_samples(
             self.control_points, start_u, samples, closed=closed
         )

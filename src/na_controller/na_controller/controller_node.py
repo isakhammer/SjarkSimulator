@@ -33,7 +33,6 @@ class ControllerNode(Node):
             "heading_kd": 2.0,
             "max_thrust": 40.0,
             "max_delta": 15.0,
-            "spline_samples": 400,
             "samples_per_meter": 4.0,
         }
         defaults = load_ros_params(
@@ -81,16 +80,11 @@ class ControllerNode(Node):
 
         new_points = [(msg.ctrl_x[i], msg.ctrl_y[i]) for i in range(n)]
         samples_per_meter = float(self.get_parameter("samples_per_meter").value)
-        if samples_per_meter > 0.0:
-            samples = samples_from_density(
-                new_points,
-                samples_per_meter,
-                closed=bool(msg.closed),
-            )
-        else:
-            samples = int(self.get_parameter("spline_samples").value)
-            if samples < 50:
-                samples = 50
+        samples = samples_from_density(
+            new_points,
+            samples_per_meter,
+            closed=bool(msg.closed),
+        )
 
         self.spline = BSplinePath(
             new_points, msg.start_u, samples, closed=bool(msg.closed)
