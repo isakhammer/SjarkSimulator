@@ -168,7 +168,6 @@ class ControllerNode(Node):
         self.thrust_pub.publish(msg)
 
 
-
 def main(args=None):
     rclpy.init(args=args)
     node = ControllerNode()

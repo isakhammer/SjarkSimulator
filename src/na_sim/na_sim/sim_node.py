@@ -64,7 +64,7 @@ class BoatSimNode(Node):
 
         # Publishers
         self.pub_state = self.create_publisher(Float32MultiArray, "/boat_state", 10)
-        self.pub_odom  = self.create_publisher(Odometry, "/odom", 10)
+        self.pub_odom = self.create_publisher(Odometry, "/odom", 10)
 
         # TF broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)

@@ -1,4 +1,3 @@
-
 import numpy as np
 
 """
@@ -63,17 +62,18 @@ The model is sufficient for control system design, trajectory following,
 and simulation of underactuated surface vessels using only CPU resources.
 """
 
+
 class Boat3DOF:
     def __init__(self, params):
-        self.m  = params["m"]
+        self.m = params["m"]
         self.Iz = params["Iz"]
-        self.Xu  = params["Xu"]
+        self.Xu = params["Xu"]
         self.Xuu = params["Xuu"]
-        self.Yv  = params["Yv"]
-        self.Yr  = params["Yr"]
-        self.Nv  = params["Nv"]
-        self.Nr  = params["Nr"]
-        self.l   = params["l"]
+        self.Yv = params["Yv"]
+        self.Yr = params["Yr"]
+        self.Nv = params["Nv"]
+        self.Nr = params["Nr"]
+        self.thruster_arm = params["l"]
 
         # state = [x, y, psi, u, v, r]
         self.state = np.zeros(6, dtype=float)
@@ -82,14 +82,14 @@ class Boat3DOF:
         x, y, psi, u, v, r = state
 
         # Kinematics
-        dx   = u * np.cos(psi) - v * np.sin(psi)
-        dy   = u * np.sin(psi) + v * np.cos(psi)
+        dx = u * np.cos(psi) - v * np.sin(psi)
+        dy = u * np.sin(psi) + v * np.cos(psi)
         dpsi = r
 
         # Input to generalized forces
         X = T_L + T_R
         Y = 0.0
-        N = self.l * (T_R - T_L)
+        N = self.thruster_arm * (T_R - T_L)
 
         # Surge
         du = (X
@@ -112,9 +112,9 @@ class Boat3DOF:
 
     def step(self, T_L, T_R, dt):
         s = self.state
-        k1 = self.dynamics(s,               T_L, T_R)
-        k2 = self.dynamics(s + 0.5*dt*k1,   T_L, T_R)
-        k3 = self.dynamics(s + 0.5*dt*k2,   T_L, T_R)
-        k4 = self.dynamics(s + dt*k3,       T_L, T_R)
-        self.state = s + dt*(k1 + 2*k2 + 2*k3 + k4)/6.0
+        k1 = self.dynamics(s, T_L, T_R)
+        k2 = self.dynamics(s + 0.5 * dt * k1, T_L, T_R)
+        k3 = self.dynamics(s + 0.5 * dt * k2, T_L, T_R)
+        k4 = self.dynamics(s + dt * k3, T_L, T_R)
+        self.state = s + dt * (k1 + 2 * k2 + 2 * k3 + k4) / 6.0
         return self.state

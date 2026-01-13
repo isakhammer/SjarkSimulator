@@ -47,7 +47,6 @@ class BoatVisualizer(Node):
 
         self.get_logger().info("BoatVisualizer started (no thrust arrows)")
 
-
     # --------------------------------------------------------
     # MAIN CALLBACK
     # --------------------------------------------------------
@@ -73,19 +72,19 @@ class BoatVisualizer(Node):
         marker = Marker()
         marker.header.frame_id = "map"
         marker.header.stamp = self.get_clock().now().to_msg()
-    
+
         marker.ns = "path_viz"
         marker.id = 0
         marker.type = Marker.LINE_STRIP
         marker.action = Marker.ADD
-    
+
         marker.scale.x = 0.05
-    
+
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.3
         marker.color.a = 1.0
-    
+
         for i in range(samples):
             p = Point()
             u = u_start + du * i
@@ -96,7 +95,6 @@ class BoatVisualizer(Node):
             marker.points.append(p)
 
         self.pub_planner_path.publish(marker)
-
 
     # --------------------------------------------------------
     # PATH TRACE
@@ -253,12 +251,11 @@ class BoatVisualizer(Node):
         p1.x = x
         p1.y = y
         p1.z = 0.15
-        
+
         p2 = Point()
         p2.x = x + np.cos(psi)
         p2.y = y + np.sin(psi)
         p2.z = 0.15
-
 
         arrow.points.append(p1)
         arrow.points.append(p2)
