@@ -1,7 +1,7 @@
 import math
 import random
 
-from na_utils.bspline import BSplinePath, samples_from_density
+from na_utils.bspline import BSplinePath, ProjectionTracker, samples_from_density
 
 
 def _scircle_control(side=30.0, exponent=8.0, count=32):
@@ -87,10 +87,9 @@ def test_projection_tracks_scircle_path():
     max_proj_jump = 0.2
     target_step = 0.18
     points = max(400, int(math.ceil(path.length / target_step)))
-    max_hint_distance = max_proj_jump
     expected_step = path.length / points
     max_error = 0.0
-    last_proj_t = None
+    tracker = ProjectionTracker()
 
     for i in range(points):
         t = path.length * i / points
@@ -98,30 +97,22 @@ def test_projection_tracks_scircle_path():
         offset = rng.uniform(-5.0, 5.0)
         x = sample.point[0] + sample.normal[0] * offset
         y = sample.point[1] + sample.normal[1] * offset
-        min_progress = 0.0
-        if last_proj_t is None:
-            proj = path.project(x, y)
-            assert proj is not None
-            proj_t = proj.t
-        else:
-            hint_t = path.advance_t(last_proj_t, expected_step)
-            proj = path.project(
-                x, y, hint_t=hint_t, max_hint_distance=max_hint_distance
-            )
-            assert proj is not None
-            delta_t = _wrap_delta(proj.t - last_proj_t, path.length)
-            delta_t = max(-max_proj_jump, min(max_proj_jump, delta_t))
-            min_progress = min(max_proj_jump, expected_step * 0.5)
-            if delta_t < min_progress:
-                delta_t = min_progress
-            proj_t = path.advance_t(last_proj_t, delta_t)
+        prev_proj_t = tracker.last_t
+        proj_t = tracker.project_t(
+            path,
+            x,
+            y,
+            max_jump=max_proj_jump,
+            pred_step=expected_step,
+            along_speed=1.0,
+        )
+        assert proj_t is not None
         delta = _wrap_delta(proj_t - t, path.length)
         max_error = max(max_error, abs(delta))
-        if last_proj_t is not None:
-            jump = _wrap_delta(proj_t - last_proj_t, path.length)
+        if prev_proj_t is not None:
+            min_progress = min(max_proj_jump, expected_step * 0.5)
+            jump = _wrap_delta(proj_t - prev_proj_t, path.length)
             assert jump >= min_progress - 1e-6
             assert jump <= max_proj_jump + 1e-6
-        last_proj_t = proj_t
-
     max_error_limit = max_proj_jump * 2.5
     assert max_error <= max_error_limit

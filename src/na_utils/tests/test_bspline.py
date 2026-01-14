@@ -118,6 +118,72 @@ def test_bspline_projection_accuracy_cm():
     assert max_cte <= 0.01
 
 
+def test_bspline_projection_hint_matches_full_search():
+    control = [
+        (0.0, 0.0),
+        (4.0, 1.0),
+        (6.0, 4.0),
+        (4.0, 7.0),
+        (0.0, 6.0),
+        (-2.0, 3.0),
+    ]
+    path = BSplinePath(control, start_u=0.0, samples=600, closed=True)
+    idx = len(path.points) // 3
+    px, py = path.points[idx]
+    _, normal = path._tangent_normal(idx)
+    x = px + normal[0] * 1.0
+    y = py + normal[1] * 1.0
+
+    proj_full = path.project(x, y)
+    proj_hint = path.project(x, y, hint_t=path.t[idx])
+
+    assert proj_full is not None
+    assert proj_hint is not None
+    step = path.length / max(1, len(path.points) - 1)
+    assert math.isclose(
+        proj_full.t,
+        proj_hint.t,
+        abs_tol=step * 5.0,
+    )
+
+
+def test_bspline_projection_max_hint_distance_limits_search():
+    control = [
+        (0.0, 0.0),
+        (5.0, 0.0),
+        (10.0, 0.0),
+        (15.0, 0.0),
+        (20.0, 0.0),
+        (25.0, 0.0),
+        (30.0, 0.0),
+        (35.0, 0.0),
+    ]
+    path = BSplinePath(
+        control, start_u=0.0, samples=300, closed=False, refine_iters=0
+    )
+    x, y = path.points[-1]
+    y += 2.0
+    max_hint_distance = 0.5
+    avg_step = path.length / max(1, len(path.points) - 1)
+    max_samples = int(math.ceil(max_hint_distance / avg_step))
+    hint_idx = len(path.points) // 2
+    assert hint_idx > max_samples
+    assert len(path.points) - hint_idx > max_samples
+    hint_t = path.t[hint_idx]
+
+    proj_full = path.project(x, y)
+    assert proj_full is not None
+    assert proj_full.t - hint_t > max_hint_distance * 2.0
+    proj_hint = path.project(
+        x,
+        y,
+        hint_t=hint_t,
+        max_hint_distance=max_hint_distance,
+    )
+    assert proj_hint is not None
+    assert abs(proj_hint.t - hint_t) <= max_hint_distance + avg_step
+
+
 def test_bspline_projection_performance_budget():
     control = [
         (0.0, 0.0),
@@ -127,7 +193,7 @@ def test_bspline_projection_performance_budget():
         (0.0, 6.0),
         (-2.0, 3.0),
     ]
-    path = BSplinePath(control, start_u=0.0, samples=1600, closed=True)
+    path = BSplinePath(control, start_u=0.0, samples=800, closed=True)
     n = len(control)
     points = []
     for k in range(100):

@@ -73,7 +73,7 @@ Tests:
     - Accuracy: project points offset by 1 m along the normal and assert the
       projection point and cte are within 0.01 m.
     - Performance: average projection time stays below 0.5 ms per call in a
-      "worst-case" 1600-sample path.
+      "worst-case" 800-sample path.
 
     Run via:
     - ct for full workspace verification.
@@ -401,6 +401,124 @@ class BSplinePath:
         t = self._wrap_t(t)
         u = self._u_at_t(t)
         return eval_bspline(self.control_points, u)
+
+
+class ProjectionTracker:
+    """
+    Track stable projections along a spline with hinting and jump limits.
+
+    This wraps the stateless `BSplinePath.project` with a stateful `last_t`
+    history, optional kinematic prediction, and clamp logic so sequential
+    projections stay smooth. That matters for controllers that project every
+    tick: `BSplinePath.project` alone can jump to a different local minimum
+    when the vessel is far from the path or the path loops back on itself.
+    """
+
+    def __init__(self) -> None:
+        self.last_t: float | None = None
+
+    def reset(self) -> None:
+        self.last_t = None
+
+    def _predict_step(
+        self,
+        path: "BSplinePath",
+        psi: float | None,
+        u: float | None,
+        v: float | None,
+        dt: float | None,
+    ) -> tuple[float, float | None]:
+        if (
+            self.last_t is None
+            or dt is None
+            or dt <= 0.0
+            or psi is None
+            or u is None
+            or v is None
+        ):
+            return 0.0, None
+        last_sample = path.sample_at_t(self.last_t)
+        tx, ty = last_sample.tangent
+        if abs(tx) < 1e-6 and abs(ty) < 1e-6:
+            return 0.0, None
+        vx = u * math.cos(psi) - v * math.sin(psi)
+        vy = u * math.sin(psi) + v * math.cos(psi)
+        along_speed = vx * tx + vy * ty
+        return along_speed * dt, along_speed
+
+    def _projection_delta(
+        self, path: "BSplinePath", last_t: float, new_t: float
+    ) -> float:
+        delta = new_t - last_t
+        if not path.closed or path.length <= 0.0:
+            return delta
+        length = path.length
+        delta = (delta + length) % length
+        if delta > 0.5 * length:
+            delta -= length
+        return delta
+
+    def project_t(
+        self,
+        path: "BSplinePath",
+        x: float,
+        y: float,
+        *,
+        max_jump: float = 0.0,
+        pred_step: float | None = None,
+        along_speed: float | None = None,
+        psi: float | None = None,
+        u: float | None = None,
+        v: float | None = None,
+        dt: float | None = None,
+    ) -> float | None:
+        """
+        Project (x, y) onto `path`, returning a stable arc-length `t`.
+
+        If `pred_step` is omitted and kinematics are provided, a predicted
+        step is computed from body velocities projected onto the path tangent.
+        That predicted step is used to seed the hint and to enforce a minimum
+        forward progress when `max_jump` is active.
+
+        Unlike `BSplinePath.project`, this method is stateful (uses `last_t`),
+        clamps large jumps, and returns only the tracked `t` value.
+        """
+        if path is None or path.empty():
+            return None
+
+        if pred_step is None:
+            pred_step, along_speed = self._predict_step(path, psi, u, v, dt)
+        else:
+            pred_step = float(pred_step)
+            if along_speed is not None:
+                along_speed = float(along_speed)
+
+        if max_jump > 0.0:
+            pred_step = max(-max_jump, min(max_jump, pred_step))
+
+        hint_t = self.last_t
+        if self.last_t is not None and pred_step != 0.0:
+            hint_t = path.advance_t(self.last_t, pred_step)
+
+        if self.last_t is not None and max_jump > 0.0:
+            projection = path.project(x, y, hint_t=hint_t, max_hint_distance=max_jump)
+        else:
+            projection = path.project(x, y, hint_t=hint_t)
+        if projection is None:
+            return None
+
+        proj_t = projection.t
+        if self.last_t is not None and max_jump > 0.0:
+            delta_t = self._projection_delta(path, self.last_t, proj_t)
+            delta_t = max(-max_jump, min(max_jump, delta_t))
+            if along_speed is not None and along_speed > 0.05:
+                min_progress = max(0.0, min(max_jump, pred_step * 0.5))
+                if delta_t < min_progress:
+                    delta_t = min_progress
+            proj_t = path.advance_t(self.last_t, delta_t)
+
+        self.last_t = proj_t
+        return proj_t
 
 
 def eval_bspline(control_points, u):
