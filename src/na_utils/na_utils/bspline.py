@@ -73,7 +73,7 @@ Tests:
     - Accuracy: project points offset by 1 m along the normal and assert the
       projection point and cte are within 0.01 m.
     - Performance: average projection time stays below 0.5 ms per call in a
-      "worst-case" 800-sample path.
+      "worst-case" 1600-sample path.
 
     Run via:
     - ct for full workspace verification.

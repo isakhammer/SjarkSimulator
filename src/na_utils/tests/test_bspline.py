@@ -90,7 +90,7 @@ def test_bspline_projection_accuracy_cm():
         (0.0, 6.0),
         (-2.0, 3.0),
     ]
-    path = BSplinePath(control, start_u=0.0, samples=800, closed=True)
+    path = BSplinePath(control, start_u=0.0, samples=1600, closed=True)
     offset = 1.0
     checked = 0
     max_err = 0.0
