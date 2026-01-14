@@ -288,7 +288,7 @@ class BSplinePath:
         return tangent, normal, curvature
 
     def _nearest_sample_index(
-        self, x: float, y: float, hint_t: float | None
+        self, x: float, y: float, hint_t: float | None, max_hint_distance: float | None
     ) -> int:
         m = len(self.points)
         if m == 0:
@@ -310,6 +310,18 @@ class BSplinePath:
         if idx >= m:
             idx = m - 1
         search = max(10, m // 50)
+        if max_hint_distance is not None:
+            if max_hint_distance <= 0.0:
+                search = 0
+            elif m > 1 and self.length > 0.0:
+                avg_step = self.length / (m - 1)
+                if avg_step > 0.0:
+                    max_samples = int(math.ceil(max_hint_distance / avg_step))
+                    search = min(search, max(1, max_samples))
+                else:
+                    search = 0
+            else:
+                search = 0
         search = min(search, m - 1)
         best_idx = idx
         best_d2 = float("inf")
@@ -330,12 +342,16 @@ class BSplinePath:
         return best_idx
 
     def project(
-        self, x: float, y: float, hint_t: float | None = None
+        self,
+        x: float,
+        y: float,
+        hint_t: float | None = None,
+        max_hint_distance: float | None = None,
     ) -> SplineProjection | None:
         """Project a point onto the spline (nearest sample + refine)."""
         if not self.points:
             return None
-        best_idx = self._nearest_sample_index(x, y, hint_t)
+        best_idx = self._nearest_sample_index(x, y, hint_t, max_hint_distance)
         u = self.u[best_idx] if self.u else 0.0
         if self.refine_iters > 0:
             u = self._refine_u(x, y, u)

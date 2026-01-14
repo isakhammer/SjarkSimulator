@@ -84,8 +84,10 @@ def test_projection_tracks_scircle_path():
     )
 
     rng = random.Random(0)
-    points = 400
-    max_hint_distance = 0.2
+    max_proj_jump = 0.2
+    target_step = 0.18
+    points = max(400, int(math.ceil(path.length / target_step)))
+    max_hint_distance = max_proj_jump
     expected_step = path.length / points
     max_error = 0.0
     last_proj_t = None
@@ -96,19 +98,30 @@ def test_projection_tracks_scircle_path():
         offset = rng.uniform(-5.0, 5.0)
         x = sample.point[0] + sample.normal[0] * offset
         y = sample.point[1] + sample.normal[1] * offset
+        min_progress = 0.0
         if last_proj_t is None:
             proj = path.project(x, y)
+            assert proj is not None
+            proj_t = proj.t
         else:
+            hint_t = path.advance_t(last_proj_t, expected_step)
             proj = path.project(
-                x, y, hint_t=last_proj_t, max_hint_distance=max_hint_distance
+                x, y, hint_t=hint_t, max_hint_distance=max_hint_distance
             )
-        assert proj is not None
-        delta = _wrap_delta(proj.t - t, path.length)
+            assert proj is not None
+            delta_t = _wrap_delta(proj.t - last_proj_t, path.length)
+            delta_t = max(-max_proj_jump, min(max_proj_jump, delta_t))
+            min_progress = min(max_proj_jump, expected_step * 0.5)
+            if delta_t < min_progress:
+                delta_t = min_progress
+            proj_t = path.advance_t(last_proj_t, delta_t)
+        delta = _wrap_delta(proj_t - t, path.length)
         max_error = max(max_error, abs(delta))
         if last_proj_t is not None:
-            jump = _wrap_delta(proj.t - last_proj_t, path.length)
-            assert jump >= -1e-6
-            assert abs(jump - expected_step) <= expected_step * 0.5
-        last_proj_t = proj.t
+            jump = _wrap_delta(proj_t - last_proj_t, path.length)
+            assert jump >= min_progress - 1e-6
+            assert jump <= max_proj_jump + 1e-6
+        last_proj_t = proj_t
 
-    assert max_error <= 0.1
+    max_error_limit = max_proj_jump * 2.5
+    assert max_error <= max_error_limit

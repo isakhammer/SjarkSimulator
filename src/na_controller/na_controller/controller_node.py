@@ -34,6 +34,7 @@ class ControllerNode(Node):
             "max_thrust": 40.0,
             "max_delta": 15.0,
             "samples_per_meter": 4.0,
+            "max_proj_jump": 0.2,
         }
         defaults = load_ros_params(
             config_path, "controller_node", defaults, logger=self.get_logger()
@@ -64,6 +65,8 @@ class ControllerNode(Node):
         self.state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # x,y,psi,u,v,r
         self.spline = None
         self.last_proj_t = None
+        self._path_signature = None
+        self._last_time = None
         self.get_logger().info("Boat LOS controller started")
 
     def state_callback(self, msg: Float32MultiArray) -> None:
@@ -76,10 +79,20 @@ class ControllerNode(Node):
             self.get_logger().warn("Received invalid spline path")
             self.spline = None
             self.last_proj_t = None
+            self._path_signature = None
             return
 
         new_points = [(msg.ctrl_x[i], msg.ctrl_y[i]) for i in range(n)]
         samples_per_meter = float(self.get_parameter("samples_per_meter").value)
+        signature = (
+            tuple(new_points),
+            bool(msg.closed),
+            float(msg.start_u),
+            samples_per_meter,
+        )
+        if self._path_signature == signature:
+            return
+        self._path_signature = signature
         samples = samples_from_density(
             new_points,
             samples_per_meter,
@@ -94,8 +107,40 @@ class ControllerNode(Node):
     def wrap_to_pi(self, angle: float) -> float:
         return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
+    def _predict_proj_step(self, psi: float, u: float, v: float, dt: float):
+        if (
+            self.last_proj_t is None
+            or not self.spline
+            or dt is None
+            or dt <= 0.0
+        ):
+            return 0.0, None
+        last_sample = self.spline.sample_at_t(self.last_proj_t)
+        tx, ty = last_sample.tangent
+        if abs(tx) < 1e-6 and abs(ty) < 1e-6:
+            return 0.0, None
+        vx = u * math.cos(psi) - v * math.sin(psi)
+        vy = u * math.sin(psi) + v * math.cos(psi)
+        along_speed = vx * tx + vy * ty
+        return along_speed * dt, along_speed
+
+    def _projection_delta(self, last_t: float, new_t: float) -> float:
+        delta = new_t - last_t
+        if not self.spline or not self.spline.closed or self.spline.length <= 0.0:
+            return delta
+        length = self.spline.length
+        delta = (delta + length) % length
+        if delta > 0.5 * length:
+            delta -= length
+        return delta
+
     def control_loop(self) -> None:
-        x, y, psi, _, _, r = self.state
+        x, y, psi, u, v, r = self.state
+        now = self.get_clock().now()
+        dt = None
+        if self._last_time is not None:
+            dt = (now - self._last_time).nanoseconds * 1e-9
+        self._last_time = now
 
         if not self.spline or self.spline.empty():
             t_l = 0.0
@@ -115,24 +160,47 @@ class ControllerNode(Node):
                     "heading_kd",
                     "max_thrust",
                     "max_delta",
+                    "max_proj_jump",
                 )
             )
         }
         lookahead = float(params["lookahead"])
-        projection = self.spline.project(x, y, hint_t=self.last_proj_t)
+        max_proj_jump = float(params["max_proj_jump"])
+        pred_step, along_speed = self._predict_proj_step(psi, u, v, dt)
+        if max_proj_jump > 0.0:
+            pred_step = max(-max_proj_jump, min(max_proj_jump, pred_step))
+        hint_t = self.last_proj_t
+        if self.last_proj_t is not None and pred_step != 0.0:
+            hint_t = self.spline.advance_t(self.last_proj_t, pred_step)
+        if self.last_proj_t is not None and max_proj_jump > 0.0:
+            projection = self.spline.project(
+                x, y, hint_t=hint_t, max_hint_distance=max_proj_jump
+            )
+        else:
+            projection = self.spline.project(x, y, hint_t=hint_t)
         if projection is None:
             return
-        self.last_proj_t = projection.t
-        proj_sample = self.spline.sample_at_t(projection.t)
+        proj_t = projection.t
+        if self.last_proj_t is not None and max_proj_jump > 0.0:
+            delta_t = self._projection_delta(self.last_proj_t, proj_t)
+            delta_t = max(-max_proj_jump, min(max_proj_jump, delta_t))
+            if along_speed is not None and along_speed > 0.05:
+                min_progress = max(0.0, min(max_proj_jump, pred_step * 0.5))
+                if delta_t < min_progress:
+                    delta_t = min_progress
+            proj_t = self.spline.advance_t(self.last_proj_t, delta_t)
+        self.last_proj_t = proj_t
+        proj_sample = self.spline.sample_at_t(proj_t)
         proj_x, proj_y = proj_sample.point
-        cte = projection.cte
+        nx, ny = proj_sample.normal
+        cte = (x - proj_x) * nx + (y - proj_y) * ny
         tx, ty = proj_sample.tangent
         if abs(tx) < 1e-6 and abs(ty) < 1e-6:
             proj_yaw = 0.0
         else:
             proj_yaw = math.atan2(ty, tx)
 
-        target_t = self.spline.advance_t(projection.t, lookahead)
+        target_t = self.spline.advance_t(proj_t, lookahead)
         target_sample = self.spline.sample_at_t(target_t)
         target_x, target_y = target_sample.point
 
