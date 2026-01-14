@@ -8,7 +8,11 @@ from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from ament_index_python.packages import get_package_share_directory
 
-from na_utils.bspline import BSplinePath, ProjectionTracker, samples_from_density
+from na_utils.bspline import (
+    BSplinePath,
+    ProjectionTracker,
+    samples_from_density,
+)
 from na_utils.ros_params import load_ros_params
 from na_msg.msg import BsplinePath, ControllerState
 
@@ -29,10 +33,10 @@ class ControllerNode(Node):
             "path_topic": "/planner_ns/path",
             "lookahead": 3.0,
             "base_thrust": 25.0,
-            "heading_kp": 10.0,
-            "heading_kd": 2.0,
+            "heading_kp": 2.0,
+            "heading_kd": 0.5,
             "max_thrust": 40.0,
-            "max_delta": 15.0,
+            "max_delta": math.pi / 2.0,
             "samples_per_meter": 4.0,
             "max_proj_jump": 0.2,
         }
@@ -42,8 +46,10 @@ class ControllerNode(Node):
         for name, value in defaults.items():
             self.declare_parameter(name, value)
 
-        # Publisher: thrust command [T_L, T_R]
-        self.thrust_pub = self.create_publisher(Float32MultiArray, "/cmd_thrust", 10)
+        # Publisher: rotor command [thrust, delta]
+        self.thrust_pub = self.create_publisher(
+            Float32MultiArray, "/cmd_thrust", 10
+        )
 
         # Subscriber: boat state [x, y, psi, u, v, r]
         self.state_sub = self.create_subscription(
@@ -57,7 +63,9 @@ class ControllerNode(Node):
         )
 
         # Publisher: controller state (debug)
-        self.state_pub = self.create_publisher(ControllerState, "controller_state", 10)
+        self.state_pub = self.create_publisher(
+            ControllerState, "controller_state", 10
+        )
 
         # Control loop timer
         self.timer = self.create_timer(0.02, self.control_loop)
@@ -83,7 +91,9 @@ class ControllerNode(Node):
             return
 
         new_points = [(msg.ctrl_x[i], msg.ctrl_y[i]) for i in range(n)]
-        samples_per_meter = float(self.get_parameter("samples_per_meter").value)
+        samples_per_meter = float(
+            self.get_parameter("samples_per_meter").value
+        )
         signature = (
             tuple(new_points),
             bool(msg.closed),
@@ -116,10 +126,8 @@ class ControllerNode(Node):
         self._last_time = now
 
         if not self.spline or self.spline.empty():
-            t_l = 0.0
-            t_r = 0.0
             msg = Float32MultiArray()
-            msg.data = [float(t_l), float(t_r)]
+            msg.data = [0.0, 0.0]
             self.thrust_pub.publish(msg)
             return
 
@@ -165,8 +173,8 @@ class ControllerNode(Node):
         target_sample = self.spline.sample_at_t(target_t)
         target_x, target_y = target_sample.point
 
-        desired = math.atan2(target_y - y, target_x - x)
-        err = self.wrap_to_pi(desired - psi)
+        desired_path = self.wrap_to_pi(proj_yaw - math.atan2(cte, lookahead))
+        err = self.wrap_to_pi(desired_path - psi)
 
         base_thrust = float(params["base_thrust"])
         heading_kp = float(params["heading_kp"])
@@ -174,13 +182,9 @@ class ControllerNode(Node):
         max_thrust = float(params["max_thrust"])
         max_delta = float(params["max_delta"])
 
-        delta = heading_kp * err - heading_kd * r
+        thrust = max(-max_thrust, min(max_thrust, base_thrust))
+        delta = -heading_kp * err - heading_kd * r
         delta = max(-max_delta, min(max_delta, delta))
-
-        t_l = base_thrust - delta
-        t_r = base_thrust + delta
-        t_l = max(-max_thrust, min(max_thrust, t_l))
-        t_r = max(-max_thrust, min(max_thrust, t_r))
 
         state_msg = ControllerState()
         state_msg.cte = float(cte)
@@ -193,7 +197,7 @@ class ControllerNode(Node):
         self.state_pub.publish(state_msg)
 
         msg = Float32MultiArray()
-        msg.data = [float(t_l), float(t_r)]
+        msg.data = [float(thrust), float(delta)]
         self.thrust_pub.publish(msg)
 
 

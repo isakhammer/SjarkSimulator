@@ -3,10 +3,10 @@ controller_node:
     path_topic: /planner_ns/path
     lookahead: 4.0
     base_thrust: 15.0
-    heading_kp: 50.0
-    heading_kd: 10.0
+    heading_kp: 2.0
+    heading_kd: 0.5
     max_thrust: 30.0
-    max_delta: 15.0
+    max_delta: 1.57079632679
     samples_per_meter: 4.0
     max_proj_jump: 0.2
 
@@ -22,3 +22,6 @@ sim_node:
     Nr: 40.0
     l: 0.5
     dt: 0.02
+    max_thrust: 40.0
+    max_delta: 1.57079632679
+    max_delta_rate: 0.0

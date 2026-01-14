@@ -25,7 +25,11 @@ class BoatSimNode(Node):
             "sim_controller_params.yaml",
         )
         self.declare_parameter("config_path", default_config)
-        config_path = self.get_parameter("config_path").get_parameter_value().string_value
+        config_path = (
+            self.get_parameter("config_path")
+            .get_parameter_value()
+            .string_value
+        )
 
         defaults = {
             "m": 70.0,
@@ -38,6 +42,9 @@ class BoatSimNode(Node):
             "Nr": 40.0,
             "l": 0.5,
             "dt": 0.05,
+            "max_thrust": 40.0,
+            "max_delta": 1.57079632679,
+            "max_delta_rate": 0.0,
         }
         defaults = load_ros_params(
             config_path, "sim_node", defaults, logger=self.get_logger()
@@ -46,13 +53,18 @@ class BoatSimNode(Node):
             self.declare_parameter(name, value)
 
         param_names = ("m", "Iz", "Xu", "Xuu", "Yv", "Yr", "Nv", "Nr", "l")
-        params = {name: float(self.get_parameter(name).value) for name in param_names}
+        params = {
+            name: float(self.get_parameter(name).value)
+            for name in param_names
+        }
 
         self.sim = Boat3DOF(params)
 
-        # Thruster inputs
-        self.T_L = 0.0
-        self.T_R = 0.0
+        # Rotor inputs (thrust magnitude + steering angle)
+        self.thrust_cmd = 0.0
+        self.delta_cmd = 0.0
+        self.thrust = 0.0
+        self.delta = 0.0
 
         # Subscribers
         self.sub_cmd = self.create_subscription(
@@ -63,7 +75,9 @@ class BoatSimNode(Node):
         )
 
         # Publishers
-        self.pub_state = self.create_publisher(Float32MultiArray, "/boat_state", 10)
+        self.pub_state = self.create_publisher(
+            Float32MultiArray, "/boat_state", 10
+        )
         self.pub_odom = self.create_publisher(Odometry, "/odom", 10)
 
         # TF broadcaster
@@ -77,12 +91,27 @@ class BoatSimNode(Node):
 
     def cmd_callback(self, msg):
         if len(msg.data) >= 2:
-            self.T_L = msg.data[0]
-            self.T_R = msg.data[1]
+            self.thrust_cmd = float(msg.data[0])
+            self.delta_cmd = float(msg.data[1])
 
     def update(self):
+        max_thrust = float(self.get_parameter("max_thrust").value)
+        max_delta = float(self.get_parameter("max_delta").value)
+        max_delta_rate = float(self.get_parameter("max_delta_rate").value)
+
+        thrust_cmd = max(-max_thrust, min(max_thrust, self.thrust_cmd))
+        delta_cmd = max(-max_delta, min(max_delta, self.delta_cmd))
+        if max_delta_rate > 0.0 and self.dt > 0.0:
+            max_step = max_delta_rate * self.dt
+            delta_err = delta_cmd - self.delta
+            delta_step = max(-max_step, min(max_step, delta_err))
+            self.delta = self.delta + delta_step
+        else:
+            self.delta = delta_cmd
+        self.thrust = thrust_cmd
+
         # Run physics
-        self.sim.step(self.T_L, self.T_R, self.dt)
+        self.sim.step(self.thrust, self.delta, self.dt)
         x, y, psi, u, v, r = self.sim.state
 
         # Publish /boat_state
