@@ -8,6 +8,7 @@ controller_node:
     max_thrust: 30.0
     max_delta: 15.0
     samples_per_meter: 4.0
+    max_proj_jump: 0.2
 
 sim_node:
   ros__parameters:
