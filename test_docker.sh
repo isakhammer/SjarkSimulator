@@ -6,7 +6,11 @@ OVERVIEW_BUILD_SCRIPT="${OVERVIEW_BUILD_SCRIPT:-./build_overview_docker.sh}"
 
 run_docker_tests() {
   local image_name="${IMAGE_NAME}"
-  docker run -it --rm \
+  local tty_flags=()
+  if [[ -t 1 ]]; then
+    tty_flags+=("-it")
+  fi
+  docker run "${tty_flags[@]}" --rm \
     -v "$(pwd)/:/root/code" \
     -w /root/code \
     "$image_name" \
