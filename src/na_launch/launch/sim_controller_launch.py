@@ -2,14 +2,18 @@ import os
 from launch import LaunchDescription
 from launch.actions import TimerAction
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
 
     # Prefer installed package share, but fall back to the source tree.
-    # pkg_path = get_package_share_directory('na_launch')
-    # pkg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    pkg_path = '/root/code/src/na_launch'
+    try:
+        pkg_path = get_package_share_directory("na_launch")
+    except Exception:
+        pkg_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..")
+        )
 
     # Prefer system QT_* overrides but default to HiDPI-safe scaling.
     plotjuggler_env = {

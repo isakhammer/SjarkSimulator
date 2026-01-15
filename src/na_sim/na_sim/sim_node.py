@@ -1,4 +1,3 @@
-
 import os
 
 import rclpy
@@ -85,7 +84,8 @@ class BoatSimNode(Node):
 
         # Time step
         self.dt = float(self.get_parameter("dt").value)
-        self.timer = self.create_timer(0.02, self.update)
+        timer_period = self.dt if self.dt > 0.0 else 0.02
+        self.timer = self.create_timer(timer_period, self.update)
 
         self.get_logger().info("Boat 3DOF simulator with Odometry started.")
 

@@ -173,8 +173,10 @@ class ControllerNode(Node):
         target_sample = self.spline.sample_at_t(target_t)
         target_x, target_y = target_sample.point
 
-        desired_path = self.wrap_to_pi(proj_yaw - math.atan2(cte, lookahead))
-        err = self.wrap_to_pi(desired_path - psi)
+        desired_heading = self.wrap_to_pi(
+            proj_yaw - math.atan2(cte, lookahead)
+        )
+        heading_error = self.wrap_to_pi(desired_heading - psi)
 
         base_thrust = float(params["base_thrust"])
         heading_kp = float(params["heading_kp"])
@@ -183,12 +185,12 @@ class ControllerNode(Node):
         max_delta = float(params["max_delta"])
 
         thrust = max(-max_thrust, min(max_thrust, base_thrust))
-        delta = -heading_kp * err - heading_kd * r
+        delta = -heading_kp * heading_error - heading_kd * r
         delta = max(-max_delta, min(max_delta, delta))
 
         state_msg = ControllerState()
         state_msg.cte = float(cte)
-        state_msg.heading_error = float(err)
+        state_msg.heading_error = float(heading_error)
         state_msg.target_x = float(target_x)
         state_msg.target_y = float(target_y)
         state_msg.proj_x = float(proj_x)
