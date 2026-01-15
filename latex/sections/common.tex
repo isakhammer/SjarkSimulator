@@ -1,0 +1,74 @@
+\section{Scope}
+This document provides a math-first description of the planning, control, and
+simulation stack. It is not an API reference, but it includes examples, edge
+cases, and limitations so expectations and tuning tradeoffs are explicit.
+
+\subsection{Primary source files}
+\begin{itemize}
+  \item Dynamics model: \texttt{src/na\_sim/na\_sim/Boat3DOF.py}
+  \item Simulator node: \texttt{src/na\_sim/na\_sim/sim\_node.py}
+  \item Planner node: \texttt{src/na\_planner/na\_planner/planner\_node.py}
+  \item Controller node: \texttt{src/na\_controller/na\_controller/controller\_node.py}
+  \item B-spline utilities: \texttt{src/na\_utils/na\_utils/bspline.py}
+  \item Default parameters: \texttt{src/na\_launch/config/sim\_controller\_params.yaml}
+\end{itemize}
+
+\section{System architecture (ROS 2)}
+The stack is a minimal closed loop:
+\begin{itemize}
+  \item The planner publishes a reference path (uniform cubic B-spline control points).
+  \item The controller projects the current boat position onto the path, computes a lookahead target, and outputs actuator commands.
+  \item The simulator integrates the vessel dynamics and publishes state/odometry.
+  \item Visualization nodes render the path, projection, CTE, and boat pose.
+\end{itemize}
+
+\subsection{Key topics}
+\begin{itemize}
+  \item \texttt{/planner\_ns/path} (\texttt{na\_msg/BsplinePath}) --- path control points.
+  \item \texttt{/boat\_state} (\texttt{std\_msgs/Float32MultiArray}) --- state vector $[x,y,\psi,u,v,r]$.
+  \item \texttt{/cmd\_thrust} (\texttt{std\_msgs/Float32MultiArray}) --- actuator command $[T,\delta]$.
+  \item \texttt{/controller\_ns/controller\_state} (\texttt{na\_msg/ControllerState}) --- debug projection/CTE data.
+  \item \texttt{/odom} (\texttt{nav\_msgs/Odometry}) and TF \texttt{map} $\rightarrow$ \texttt{base\_link}.
+\end{itemize}
+
+\subsection{Data flow diagram}
+\Cref{fig:architecture} summarizes the main signals.
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}[>=Latex,node distance=2.4cm]
+    \node[draw,rounded corners,align=center,minimum width=3.0cm] (planner) {Planner\\\texttt{BsplinePath}};
+    \node[draw,rounded corners,align=center,minimum width=3.0cm,right=of planner] (controller) {Controller\\LOS guidance};
+    \node[draw,rounded corners,align=center,minimum width=3.0cm,right=of controller] (sim) {Simulator\\Boat3DOF};
+    \node[draw,rounded corners,align=center,minimum width=2.4cm,below=1.4cm of controller] (viz) {Visualization};
+
+    \draw[->] (planner) -- node[above] {\texttt{/planner\_ns/path}} (controller);
+    \draw[->] (controller) -- node[above] {\texttt{/cmd\_thrust}} (sim);
+    \draw[->] (sim) -- node[above] {\texttt{/boat\_state}} (controller);
+    \draw[->,dashed] (sim) -- node[right] {\texttt{/odom}, TF} (viz);
+    \draw[->,dashed] (planner) -- (viz);
+    \draw[->,dashed] (controller) -- (viz);
+  \end{tikzpicture}
+  \caption{Data flow between the planner, controller, simulator, and visualization.}
+  \label{fig:architecture}
+\end{figure}
+
+\section{Frames, signals, and conventions}
+The simulator uses a planar world frame \emph{map} and a body frame \emph{base\_link}:
+\begin{itemize}
+  \item $x,y$ are inertial positions in the map frame (meters).
+  \item $\psi$ is the heading/yaw angle (radians, CCW positive).
+  \item $u,v$ are body-frame surge/sway velocities (m/s).
+  \item $r$ is yaw rate (rad/s).
+\end{itemize}
+
+The actuator is a stern-mounted steerable rotor producing a thrust magnitude $T$
+and an angle $\delta$ relative to body $+x$ (positive CCW). With a positive arm
+$\ell > 0$ and the rotor located at $x=-\ell$, the yaw moment is
+$N=-\ell\,T\sin\delta$, so positive $\delta$ produces a clockwise (negative) yaw
+moment.
+
+\subsection{Notation collisions}
+The code uses $u$ for both surge velocity (a standard marine convention) and the
+spline's internal unitless parameter. In the text we will write the spline
+parameter as $u_{\mathrm{spline}}$ when needed; the arc-length parameter is
+denoted $t$ (meters), consistent with \texttt{BSplinePath}.

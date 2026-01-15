@@ -36,6 +36,12 @@ def fmt_coords(points) -> str:
     return " ".join(fmt_point(point) for point in points)
 
 
+def bounds(points):
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
 def write_tikz(filename: str, lines) -> None:
     path = os.path.join(FIG_DIR, filename)
     with open(path, "w", encoding="ascii") as handle:
@@ -80,23 +86,40 @@ def los_example() -> None:
 
     path_points = downsample(path.points, max_points=160)
     coords = fmt_coords(path_points)
+    min_x, max_x, min_y, max_y = bounds(path_points)
+    legend_x = max_x + 1.0
+    legend_y = max_y - 0.2
+    legend_gap = 0.45
+    legend_label_x = legend_x + 0.25
 
     lines = [
-        "\\begin{tikzpicture}[>=Latex,scale=1.0]",
-        f"  \\draw[thick] plot [smooth cycle] coordinates {{ {coords} }};",
+        "\\begin{tikzpicture}[>=Latex,scale=1.0,every node/.style={font=\\scriptsize}]",
+        "  \\tikzset{",
+        "    path/.style={thick,black!70},",
+        "    cte/.style={red!70!black,thick,->},",
+        "    look/.style={blue!70!black,thick,->},",
+        "    tan/.style={gray!70,->},",
+        "    boat/.style={circle,fill=black,inner sep=1.2pt},",
+        "    proj/.style={circle,draw=red!70!black,fill=white,inner sep=1.2pt},",
+        "    lookahead/.style={regular polygon,regular polygon sides=3,draw=blue!70!black,fill=blue!20,minimum size=5pt,inner sep=0pt,rotate=90}",
+        "  }",
+        f"  \\draw[path] plot [smooth cycle] coordinates {{ {coords} }};",
         f"  \\coordinate (boat) at {fmt_point(boat)};",
         f"  \\coordinate (proj) at {fmt_point(proj.point)};",
         f"  \\coordinate (target) at {fmt_point(target)};",
         f"  \\coordinate (tan) at {fmt_point(tangent_end)};",
-        "  \\fill (boat) circle (1.4pt);",
-        "  \\node[anchor=west] at (boat) {boat};",
-        "  \\fill (proj) circle (1.4pt);",
-        "  \\node[anchor=south east] at (proj) {projection};",
-        "  \\fill (target) circle (1.4pt);",
-        "  \\node[anchor=south] at (target) {lookahead};",
-        "  \\draw[->,red] (proj) -- (boat) node[midway,right] {cte};",
-        "  \\draw[->,blue] (proj) -- (target) node[midway,above] {lookahead};",
-        "  \\draw[->,gray] (proj) -- (tan) node[above] {tangent};",
+        "  \\node[boat] at (boat) {};",
+        "  \\node[proj] at (proj) {};",
+        "  \\node[lookahead] at (target) {};",
+        "  \\draw[cte] (proj) -- (boat) node[midway,right] {cte};",
+        "  \\draw[look] (proj) -- (target) node[midway,above] {L};",
+        "  \\draw[tan] (proj) -- (tan) node[above] {t};",
+        f"  \\node[boat] at ({legend_x:.3f},{legend_y:.3f}) {{}};",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y:.3f}) {{B boat}};",
+        f"  \\node[proj] at ({legend_x:.3f},{legend_y - legend_gap:.3f}) {{}};",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y - legend_gap:.3f}) {{P proj}};",
+        f"  \\node[lookahead] at ({legend_x:.3f},{legend_y - 2.0 * legend_gap:.3f}) {{}};",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y - 2.0 * legend_gap:.3f}) {{L look}};",
         "\\end{tikzpicture}",
     ]
     write_tikz("los_example.tikz", lines)
@@ -138,26 +161,46 @@ def open_end_example() -> None:
 
     path_points = downsample(path.points, max_points=120)
     coords = fmt_coords(path_points)
+    min_x, max_x, min_y, max_y = bounds(path_points)
+    legend_x = max_x + 0.8
+    legend_y = max_y - 0.1
+    legend_gap = 0.45
+    legend_label_x = legend_x + 0.25
+    beyond_label = (beyond[0] + 0.1, beyond[1] + 0.1)
 
     lines = [
-        "\\begin{tikzpicture}[>=Latex,scale=1.0]",
-        f"  \\draw[thick] plot [smooth] coordinates {{ {coords} }};",
+        "\\begin{tikzpicture}[>=Latex,scale=1.0,every node/.style={font=\\scriptsize}]",
+        "  \\tikzset{",
+        "    path/.style={thick,black!70},",
+        "    cte/.style={red!70!black,thick,->},",
+        "    look/.style={blue!70!black,thick,->},",
+        "    boat/.style={circle,fill=black,inner sep=1.2pt},",
+        "    proj/.style={circle,draw=red!70!black,fill=white,inner sep=1.2pt},",
+        "    lookahead/.style={regular polygon,regular polygon sides=3,draw=blue!70!black,fill=blue!20,minimum size=5pt,inner sep=0pt,rotate=90},",
+        "    endpt/.style={rectangle,draw=green!60!black,fill=white,minimum size=4pt,inner sep=0pt}",
+        "  }",
+        f"  \\draw[path] plot [smooth] coordinates {{ {coords} }};",
         f"  \\coordinate (boat) at {fmt_point(boat)};",
         f"  \\coordinate (proj) at {fmt_point(proj.point)};",
         f"  \\coordinate (target) at {fmt_point(target)};",
         f"  \\coordinate (endpt) at {fmt_point(end_point)};",
         f"  \\coordinate (beyond) at {fmt_point(beyond)};",
-        "  \\fill (boat) circle (1.4pt);",
-        "  \\node[anchor=west] at (boat) {boat};",
-        "  \\fill (proj) circle (1.4pt);",
-        "  \\node[anchor=south] at (proj) {projection};",
-        "  \\fill (target) circle (1.4pt);",
-        "  \\node[anchor=south] at (target) {lookahead};",
-        "  \\fill (endpt) circle (1.2pt);",
-        "  \\node[anchor=south] at (endpt) {end};",
-        "  \\draw[->,red] (proj) -- (boat) node[midway,right] {cte};",
-        "  \\draw[->,blue] (proj) -- (target) node[midway,above] {lookahead clamps};",
-        "  \\draw[dashed] (endpt) -- (beyond) node[anchor=west] {beyond end};",
+        "  \\node[boat] at (boat) {};",
+        "  \\node[proj] at (proj) {};",
+        "  \\node[lookahead] at (target) {};",
+        "  \\node[endpt] at (endpt) {};",
+        "  \\draw[cte] (proj) -- (boat) node[midway,right] {cte};",
+        "  \\draw[look] (proj) -- (target) node[midway,above] {L};",
+        "  \\draw[dashed,gray] (endpt) -- (beyond);",
+        f"  \\node[anchor=west] at {fmt_point(beyond_label)} {{beyond}};",
+        f"  \\node[boat] at ({legend_x:.3f},{legend_y:.3f}) {{}};",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y:.3f}) {{B boat}};",
+        f"  \\node[proj] at ({legend_x:.3f},{legend_y - legend_gap:.3f}) {{}};",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y - legend_gap:.3f}) {{P proj}};",
+        f"  \\node[lookahead] at ({legend_x:.3f},{legend_y - 2.0 * legend_gap:.3f}) {{}};",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y - 2.0 * legend_gap:.3f}) {{L look}};",
+        f"  \\node[endpt] at ({legend_x:.3f},{legend_y - 3.0 * legend_gap:.3f}) {{}};",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y - 3.0 * legend_gap:.3f}) {{E end}};",
         "\\end{tikzpicture}",
     ]
     write_tikz("open_end.tikz", lines)
@@ -183,24 +226,31 @@ def sampling_density_example() -> None:
     coarse_coords = fmt_coords(coarse.points)
     coarse_points = ", ".join(fmt_point(point) for point in coarse.points)
 
-    xs = [point[0] for point in fine.points]
-    ys = [point[1] for point in fine.points]
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    legend_x = max_x + 0.4
-    legend_y = max_y - 0.4
-    legend_gap = 0.5
+    min_x, max_x, min_y, max_y = bounds(fine.points)
+    legend_x = max_x + 0.6
+    legend_y = max_y - 0.2
+    legend_gap = 0.45
+    legend_line_x0 = legend_x - 0.9
+    legend_line_x1 = legend_x - 0.3
+    legend_label_x = legend_x + 0.05
+    legend_point_x = legend_x - 0.6
 
     lines = [
-        "\\begin{tikzpicture}[>=Latex,scale=0.95]",
-        f"  \\draw[thick,blue] plot [smooth cycle] coordinates {{ {fine_coords} }};",
-        f"  \\draw[orange,dashed] plot [smooth cycle] coordinates {{ {coarse_coords} }};",
-        "  \\foreach \\p in {" + coarse_points + "} { \\fill[orange] \\p circle (0.7pt); }",
-        f"  \\draw[blue,thick] ({legend_x - 1.0:.3f},{legend_y:.3f}) -- ({legend_x - 0.2:.3f},{legend_y:.3f});",
-        f"  \\node[blue,anchor=west] at ({legend_x:.3f},{legend_y:.3f}) {{fine path}};",
-        f"  \\draw[orange,dashed] ({legend_x - 1.0:.3f},{legend_y - legend_gap:.3f}) -- ({legend_x - 0.2:.3f},{legend_y - legend_gap:.3f});",
-        f"  \\fill[orange] ({legend_x - 0.6:.3f},{legend_y - legend_gap:.3f}) circle (0.7pt);",
-        f"  \\node[orange,anchor=west] at ({legend_x:.3f},{legend_y - legend_gap:.3f}) {{coarse samples}};",
+        "\\begin{tikzpicture}[>=Latex,scale=0.95,every node/.style={font=\\scriptsize}]",
+        "  \\tikzset{",
+        "    finepath/.style={thick,black!70},",
+        "    coarsepath/.style={orange!80!black,dashed},",
+        "    coarsept/.style={circle,draw=orange!80!black,fill=orange!40,inner sep=0.6pt}",
+        "  }",
+        f"  \\draw[finepath] plot [smooth cycle] coordinates {{ {fine_coords} }};",
+        f"  \\draw[coarsepath] plot [smooth cycle] coordinates {{ {coarse_coords} }};",
+        "  \\foreach \\p in {" + coarse_points + "} { \\node[coarsept] at \\p {}; }",
+        f"  \\draw[finepath] ({legend_line_x0:.3f},{legend_y:.3f}) -- ({legend_line_x1:.3f},{legend_y:.3f});",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y:.3f}) {{fine path}};",
+        f"  \\draw[coarsepath] ({legend_line_x0:.3f},{legend_y - legend_gap:.3f}) -- ({legend_line_x1:.3f},{legend_y - legend_gap:.3f});",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y - legend_gap:.3f}) {{coarse path}};",
+        f"  \\node[coarsept] at ({legend_point_x:.3f},{legend_y - 2.0 * legend_gap:.3f}) {{}};",
+        f"  \\node[anchor=west] at ({legend_label_x:.3f},{legend_y - 2.0 * legend_gap:.3f}) {{samples}};",
         "\\end{tikzpicture}",
     ]
     write_tikz("sampling_density.tikz", lines)

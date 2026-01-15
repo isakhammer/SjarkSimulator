@@ -1,0 +1,131 @@
+\section{Control (LOS guidance)}
+\subsection{Projection and Frenet frame}
+The controller operates in the path's local Frenet frame, obtained by projecting
+the boat position $(x,y)$ onto the spline. Projection is a two-stage process:
+\begin{enumerate}
+  \item Find the nearest sampled point (optionally within a window around a hint).
+  \item Refine $u_{\mathrm{spline}}$ with a Gauss--Newton step along the spline tangent:
+  \[
+    \Delta u_{\mathrm{spline}} =
+      \frac{(\mathbf{p}-\mathbf{C}(u_{\mathrm{spline}})) \cdot \mathbf{C}'(u_{\mathrm{spline}})}
+      {\mathbf{C}'(u_{\mathrm{spline}})\cdot\mathbf{C}'(u_{\mathrm{spline}})}.
+  \]
+\end{enumerate}
+The result provides a Frenet frame with unit tangent $\hat{\mathbf{t}}$,
+unit normal $\hat{\mathbf{n}} = (-\hat{t}_y,\hat{t}_x)$ (left normal), and signed
+cross-track error
+\[
+  cte = (\mathbf{p}-\mathbf{p}_{proj}) \cdot \hat{\mathbf{n}}.
+\]
+With this convention, $cte > 0$ means the boat is to the left of the path
+tangent direction.
+
+\subsection{\texttt{ProjectionTracker}}
+\texttt{ProjectionTracker} adds state to stabilize sequential projections:
+\begin{itemize}
+  \item It keeps the last arc-length projection $t$.
+  \item It predicts forward progress using body velocities and heading, by
+    projecting the inertial velocity onto the path tangent.
+  \item It limits jumps via \texttt{max\_jump} and can enforce minimum forward
+    progress when the along-track speed is positive.
+\end{itemize}
+This reduces projection snapping on self-intersections but does not eliminate
+all ambiguity.
+
+\subsection{LOS guidance law}
+The controller follows a line-of-sight (LOS) guidance pattern:
+\begin{enumerate}
+  \item If no valid spline is available, publish $[0,0]$ and exit.
+  \item Project $(x,y)$ onto the path to get $t$, tangent, normal, and $cte$.
+  \item Compute the path heading $\psi_{path}$ from the tangent; if the tangent
+    norm is near zero, $\psi_{path}=0$.
+  \item Choose a lookahead distance $L$ and advance to $t_{target}=t+L$.
+  \item Compute desired heading
+    \[
+      \psi_d = \mathrm{wrap}\left(\psi_{path} - \arctan2(cte, L)\right).
+    \]
+  \item Apply a PD law on heading error with saturation:
+    \[
+      \delta = \mathrm{sat}\left(-k_p\,\mathrm{wrap}(\psi_d-\psi) - k_d\,r,\;\delta_{\max}\right).
+    \]
+  \item Thrust is constant: $T=\mathrm{sat}(T_0, T_{\max})$.
+\end{enumerate}
+The steering sign is consistent with the simulator's moment convention: positive
+$\delta$ produces a negative yaw moment, so the controller uses a leading minus
+sign in the PD law.
+
+\subsection{Configuration parameters}
+Default parameters live in \texttt{src/na\_launch/config/sim\_controller\_params.yaml}.
+\texttt{config\_path} can override the YAML file for both simulator and controller.
+
+\subsection{Controller parameters}
+\begin{table}[h]
+  \centering
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Parameter & Default & Units & Meaning \\
+    \midrule
+    \texttt{path\_topic} & \texttt{/planner\_ns/path} & -- & BsplinePath source \\
+    \texttt{lookahead} & 4.0 & \si{\meter} & LOS lookahead distance \\
+    \texttt{base\_thrust} & 15.0 & \si{\newton} & Constant thrust command \\
+    \texttt{heading\_kp} & 2.0 & -- & Heading proportional gain \\
+    \texttt{heading\_kd} & 0.5 & \si{\second} & Yaw-rate damping gain \\
+    \texttt{max\_thrust} & 30.0 & \si{\newton} & Thrust saturation \\
+    \texttt{max\_delta} & 1.570796 & \si{\radian} & Steering saturation \\
+    \texttt{samples\_per\_meter} & 4.0 & \si{\per\meter} & B-spline sample density \\
+    \texttt{max\_proj\_jump} & 0.2 & \si{\meter} & Projection jump limit \\
+    \bottomrule
+  \end{tabular}
+  \caption{Controller tuning parameters and defaults.}
+  \label{tab:controller_params}
+\end{table}
+
+\subsection{Examples and edge cases}
+Figures in this section are generated from the same B-spline utilities used by
+the controller, via \texttt{latex/scripts/generate\_figures.py}.
+
+\subsubsection{Example: closed-loop LOS tracking}
+\Cref{fig:los_example} illustrates the projection, cross-track error, and
+lookahead target on a closed spline generated from the same projection code.
+\begin{figure}[h]
+  \centering
+  \input{figures/los_example.tikz}
+  \caption{LOS tracking geometry on a closed spline generated from the path utilities (B: boat, P: projection, L: lookahead).}
+  \label{fig:los_example}
+\end{figure}
+
+\subsubsection{Example: open path end behavior}
+\Cref{fig:open_end} shows an open path with the vessel near the end. The
+lookahead point clamps at the end of the spline; there is no wrap-around.
+\begin{figure}[h]
+  \centering
+  \input{figures/open_end.tikz}
+  \caption{Open-path end behavior: \texttt{advance\_t} clamps instead of wrapping (B: boat, P: projection, L: lookahead, E: end).}
+  \label{fig:open_end}
+\end{figure}
+
+\subsubsection{Edge case: sparse sampling}
+\Cref{fig:sampling_density} compares a dense spline sample to a coarse sample
+count. Sparse samples reduce projection accuracy and can create large $cte$
+discontinuities.
+\begin{figure}[h]
+  \centering
+  \input{figures/sampling_density.tikz}
+  \caption{Effect of low sampling density on the spline representation (coarse samples shown as points).}
+  \label{fig:sampling_density}
+\end{figure}
+
+\subsubsection{Expected behavior}
+\begin{itemize}
+  \item Fewer than 4 control points or mismatched \texttt{ctrl\_x}/\texttt{ctrl\_y} arrays:
+    controller rejects the path, outputs $[0,0]$, and resets projection history.
+  \item Very low \texttt{samples\_per\_meter} (or non-positive values): the spline is
+    still built but with coarse sampling, which degrades projection accuracy (see
+    \Cref{fig:sampling_density}).
+  \item Self-intersections or tight loops: multiple projections can be locally optimal.
+    \texttt{max\_proj\_jump} helps, but jumps are still possible with sharp geometry.
+  \item Tangent norm near zero (repeated control points): heading defaults to 0,
+    so steering may be arbitrary until geometry improves.
+  \item Extremely small lookahead: high steering activity and oscillation.
+    Extremely large lookahead: slow convergence and large steady-state $cte$.
+\end{itemize}

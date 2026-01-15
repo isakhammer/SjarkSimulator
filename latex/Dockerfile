@@ -6,6 +6,7 @@ WORKDIR /workspace
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       make \
+      python3 \
       latexmk \
       texlive-latex-base \
       texlive-latex-recommended \
@@ -16,4 +17,3 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 CMD ["make", "-C", "latex", "pdf"]
-

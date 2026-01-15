@@ -1,0 +1,77 @@
+\section{Planning (path generation)}
+\subsection{Published message: \texttt{na\_msg/BsplinePath}}
+The planner publishes a \texttt{BsplinePath} message consisting of parallel
+arrays \texttt{ctrl\_x}, \texttt{ctrl\_y} (and \texttt{ctrl\_z}, currently always
+zero). The controller requires:
+\begin{itemize}
+  \item at least 4 control points, and
+  \item matching lengths for \texttt{ctrl\_x} and \texttt{ctrl\_y}.
+\end{itemize}
+The \texttt{closed} flag indicates whether indices wrap (closed loop) or clamp
+at endpoints (open path). The message includes \texttt{degree} but the current
+implementation always uses a uniform cubic spline, and therefore ignores
+\texttt{degree}. The \texttt{start\_u} field provides an offset for the spline's
+internal parameterization.
+
+\subsection{Planner node (\texttt{planner\_node.py})}
+The current ``planner'' is intentionally simple: it is a deterministic path
+generator for closed-loop controller development. It publishes at a fixed timer
+rate and selects a path using the parameter \texttt{path\_type}:
+\begin{itemize}
+  \item \texttt{CIRCLE}: a circle built from evenly spaced control points.
+  \item \texttt{SQUARE\_SINUS}: a square-like loop with repeated corner points to
+    adjust corner sharpness.
+\end{itemize}
+
+\subsection{Path alignment}
+Before publishing, the planner aligns the path so runs start from a consistent
+pose. The helper \texttt{\_align\_path\_to\_origin}:
+\begin{enumerate}
+  \item samples a closed spline preview,
+  \item selects an ``anchor'' at approximately the lowest-$y$ sample,
+  \item rotates the path so the local tangent points along $+x$, and
+  \item translates the anchor to the origin.
+\end{enumerate}
+This keeps experiments repeatable across restarts.
+
+\subsection{Uniform cubic B-spline representation}
+The published control points are interpreted as a uniform cubic B-spline. The
+code uses a unitless internal parameter $u_{\mathrm{spline}} = i + \tau$, where
+$i=\lfloor u_{\mathrm{spline}} \rfloor$ and $\tau \in [0,1)$. The spline value is
+\[
+  \mathbf{C}(u_{\mathrm{spline}}) = b_0(\tau)\mathbf{P}_{i-1} + b_1(\tau)\mathbf{P}_{i}
+  + b_2(\tau)\mathbf{P}_{i+1} + b_3(\tau)\mathbf{P}_{i+2},
+\]
+with basis functions:
+\begin{align}
+  b_0(\tau) &= \frac{-\tau^3 + 3\tau^2 - 3\tau + 1}{6}, &
+  b_1(\tau) &= \frac{3\tau^3 - 6\tau^2 + 4}{6}, \\
+  b_2(\tau) &= \frac{-3\tau^3 + 3\tau^2 + 3\tau + 1}{6}, &
+  b_3(\tau) &= \frac{\tau^3}{6}.
+\end{align}
+For closed paths, indices wrap modulo $n$. For open paths, $u_{\mathrm{spline}}$
+spans $[0,\,n-3]$ and clamps at the ends.
+
+\subsection{Sampling and arc length}
+\texttt{BSplinePath} samples the spline uniformly in $u_{\mathrm{spline}}$ and
+accumulates Euclidean distances to approximate arc length $t$ (meters). The
+sampled arrays provide fast conversions between $u_{\mathrm{spline}}$ and $t$.
+The helper \texttt{samples\_from\_density} converts a \texttt{samples\_per\_meter}
+tuning knob into a sample count by estimating the spline length from a coarse
+preview.
+
+\subsection{Planner parameters}
+The planner currently exposes:
+\begin{table}[h]
+  \centering
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Parameter & Default & Units & Meaning \\
+    \midrule
+    \texttt{path\_type} & \texttt{SQUARE\_SINUS} & -- & Which demo path to publish \\
+    \texttt{samples\_per\_meter} & 4.0 & \si{\per\meter} & Sampling density for preview + controller \\
+    \bottomrule
+  \end{tabular}
+  \caption{Planner node parameters (see \texttt{planner\_node.py}).}
+  \label{tab:planner_params}
+\end{table}

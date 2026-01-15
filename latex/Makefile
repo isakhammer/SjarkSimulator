@@ -6,7 +6,12 @@ FIGURE_SCRIPT := scripts/generate_figures.py
 
 pdf: figures
 	mkdir -p "$(OUTDIR)"
-	latexmk -pdf -interaction=nonstopmode -halt-on-error -output-directory="$(OUTDIR)" "$(MAIN).tex"
+	@if command -v latexmk >/dev/null 2>&1; then \
+		latexmk -pdf -interaction=nonstopmode -halt-on-error -output-directory="$(OUTDIR)" "$(MAIN).tex"; \
+	else \
+		pdflatex -interaction=nonstopmode -halt-on-error -output-directory="$(OUTDIR)" "$(MAIN).tex"; \
+		pdflatex -interaction=nonstopmode -halt-on-error -output-directory="$(OUTDIR)" "$(MAIN).tex"; \
+	fi
 
 figures:
 	python3 "$(FIGURE_SCRIPT)"
