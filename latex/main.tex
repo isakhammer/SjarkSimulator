@@ -387,164 +387,234 @@ discontinuities.
 \end{itemize}
 \clearpage
 \section{Simulator}
-\subsection{3-DOF vessel model}
-\subsubsection{Motivation}
-For the planner/controller pipeline we primarily care about horizontal-plane
-motion: position $(x,y)$ and heading $\psi$. A 3-DOF surface-vessel model is a
-useful first-principles baseline because it
-(i) captures the key underactuated nature of the platform (3 generalized
-coordinates but 2 actuator inputs),
-(ii) includes the most important kinematic and Coriolis/centripetal couplings
-for planar motion, and
-(iii) stays lightweight enough to run fast and be easy to tune.
+\subsection{Three Degree of Freedom Vessel Model}
 
-This section is intentionally written as a warmup for a later 12-state
-(\,6-DOF\,) model: the same split between pose and body velocities carries over,
-and the additional DOFs can be added by extending the vectors and force models
-rather than changing the overall structure.
+\subsubsection{Motivation and Scope}
+This simulator models the motion of a small surface vessel in two dimensions, focusing on its behavior in the horizontal plane. For tasks such as path following, obstacle avoidance, and low-speed maneuvering, the dominant dynamics are those governing planar motion—namely translation in the forward and lateral directions, and rotation about the vertical axis. Vertical motion and angular attitude dynamics (heave, roll, and pitch) are typically negligible in this regime and are therefore excluded for simplicity.
 
-\subsubsection{Definition (3 DOF)}
-``3 DOF'' here means the vessel configuration is restricted to the horizontal
-plane: \emph{surge} (forward), \emph{sway} (lateral), and \emph{yaw} (heading).
-We use the standard marine-craft partition into pose and body-frame velocities:
-\[
-  \boldsymbol{\eta} = [x,\;y,\;\psi]^T,\qquad
-  \boldsymbol{\nu} = [u,\;v,\;r]^T.
-\]
-The full simulator state is $\mathbf{x} = [\boldsymbol{\eta}^T,\;
-\boldsymbol{\nu}^T]^T$.
+We adopt a classical three degree of freedom (3 DOF) rigid body model capturing surge (forward motion), sway (sideways motion), and yaw (heading rate). This model serves as a physically meaningful baseline that is easy to implement, fast to simulate, and compatible with later extensions to full six degree of freedom models.
 
-In a 6-DOF rigid-body model (often represented with 12 states), these vectors
-generalize to
-$\boldsymbol{\eta}_6=[x,y,z,\phi,\theta,\psi]^T$ and
-$\boldsymbol{\nu}_6=[u,v,w,p,q,r]^T$. The 3-DOF model is recovered by enforcing
-$z=\phi=\theta=0$ and $w=p=q=0$ and by neglecting the corresponding forces and
-moments.
-
-\subsubsection{Assumptions}
-The 3-DOF model is designed to be ``good enough'' for path-following and basic
-controller tuning rather than high-fidelity seakeeping:
+\subsubsection{Coordinate Frames}
+We define two coordinate frames:
 \begin{itemize}
-  \item Planar motion only (no heave/roll/pitch); the world is flat with $z=0$.
-  \item Rigid body with constant mass $m$ and yaw inertia $I_z$.
-  \item Calm-water operation: no waves; current/wind are neglected (or treated
-        as external disturbances rather than modeled explicitly).
-  \item Simplified hydrodynamics: no added mass; damping is captured with a
-        small set of linear and quadratic terms.
-  \item Actuation is an ideal steerable stern rotor: inputs are applied
-        instantaneously as a thrust magnitude and angle (no motor/servo
-        dynamics), with optional saturation and steering rate limit.
-  \item No actuator allocation: the rotor is the only force source.
+  \item The \textbf{world frame} $\{W\}$ is a fixed inertial frame with horizontal axes $x$ and $y$, and vertical axis $z$ pointing upward.
+  \item The \textbf{body frame} $\{B\}$ is attached to the vessel at its center of gravity. The body $x$ axis points forward along the vessel's longitudinal axis, the $y$ axis points to starboard, and the $z$ axis points downward, following the marine convention.
 \end{itemize}
 
-\subsubsection{Towards a 12-state (6-DOF) model}
-The standard extension is to add vertical motion and attitude dynamics and to
-make the force models richer while keeping the same overall structure:
-\begin{itemize}
-  \item Extend the pose and velocity vectors to $(\boldsymbol{\eta}_6,
-        \boldsymbol{\nu}_6)$, adding $(z,\phi,\theta)$ and $(w,p,q)$.
-  \item Add hydrostatic restoring forces/moments (gravity + buoyancy) and
-        frame-dependent kinematics for roll/pitch.
-  \item Add added-mass and more complete Coriolis/centripetal coupling.
-  \item Add environmental loads (current, wind, waves) and actuator dynamics
-        (motor/servo time constants, rate limits, saturations).
-\end{itemize}
-In later sections this provides a consistent path from the compact 3-DOF model
-to a higher-fidelity model without changing frames, sign conventions, or the
-definition of the generalized force vector.
+The vessel's heading angle $\psi$ defines the rotation of the body frame relative to the world frame, measured from the world $x$ axis to the body $x$ axis in the horizontal plane.
 
-\subsubsection{State}
-The simulator state vector is
+\subsubsection{Degrees of Freedom: Surge, Sway, and Yaw}
+The motion of the vessel is described using three degrees of freedom:
+\begin{itemize}
+  \item \textbf{Surge} (\( u \)) is the translational velocity in the forward direction (along the body $x$ axis).
+  \item \textbf{Sway} (\( v \)) is the lateral velocity toward starboard (along the body $y$ axis).
+  \item \textbf{Yaw} (\( r \)) is the angular velocity about the vertical axis (body $z$ axis), corresponding to changes in heading.
+\end{itemize}
+
+These three motions define the 3 DOF configuration of the vessel in the horizontal plane.
+
+\subsubsection{State Variables}
+The vessel state is split into pose and velocity:
+\begin{align*}
+\boldsymbol{\eta} &=
+\begin{bmatrix}
+x \\ y \\ \psi
+\end{bmatrix}, \quad \text{position and heading in world frame}, \\
+\boldsymbol{\nu} &=
+\begin{bmatrix}
+u \\ v \\ r
+\end{bmatrix}, \quad \text{velocities in body frame}.
+\end{align*}
+The complete simulator state vector is:
 \[
-  \mathbf{x} = [x,\; y,\; \psi,\; u,\; v,\; r]^T.
+\mathbf{x} =
+\begin{bmatrix}
+\boldsymbol{\eta} \\
+\boldsymbol{\nu}
+\end{bmatrix}
+=
+\begin{bmatrix}
+x \\ y \\ \psi \\ u \\ v \\ r
+\end{bmatrix}.
 \]
 
 \subsubsection{Kinematics}
-With body-frame velocities $(u,v)$ and heading $\psi$,
+To relate body-frame velocities to changes in world-frame position, we use a rotation matrix:
 \[
-  \dot{\boldsymbol{\eta}} = \mathbf{R}(\psi)\boldsymbol{\nu},\quad
-  \mathbf{R}(\psi)=
-  \begin{bmatrix}
-    \cos\psi & -\sin\psi & 0\\
-    \sin\psi & \cos\psi & 0\\
-    0 & 0 & 1
-  \end{bmatrix},
+\mathbf{R}(\psi) =
+\begin{bmatrix}
+\cos\psi & -\sin\psi & 0 \\
+\sin\psi &  \cos\psi & 0 \\
+0        &  0        & 1
+\end{bmatrix}.
 \]
+The kinematic equations are:
+\[
+\dot{\boldsymbol{\eta}} = \mathbf{R}(\psi)\boldsymbol{\nu},
+\]
+which yields:
 \begin{align}
+\dot{x} &= u\cos\psi - v\sin\psi, \\
+\dot{y} &= u\sin\psi + v\cos\psi, \\
+\dot{\psi} &= r.
+\end{align}
+
+\subsubsection{Actuation and Force Mapping}
+The vessel is actuated by a single steerable rotor located at a distance \( \ell \) behind the center of gravity, along the body $x$ axis. The control inputs are:
+\begin{itemize}
+  \item \( T \in \mathbb{R} \): thrust magnitude,
+  \item \( \delta \in \mathbb{R} \): steering angle relative to the body $x$ axis.
+\end{itemize}
+
+The thrust vector in the body frame is:
+\[
+\mathbf{f}_T =
+\begin{bmatrix}
+T\cos\delta \\
+T\sin\delta \\
+0
+\end{bmatrix}.
+\]
+
+The generalized force components become:
+\begin{align}
+X &= T\cos\delta, \quad \text{(surge)} \\
+Y &= T\sin\delta, \quad \text{(sway)} \\
+N &= -\ell \cdot Y = -\ell T \sin\delta, \quad \text{(yaw moment)}.
+\end{align}
+
+\subsubsection{Rigid Body Dynamics}
+We apply Newton–Euler equations in the body frame.
+
+\paragraph{Linear Momentum}
+The vessel has linear momentum
+\[
+\mathbf{p} = m
+\begin{bmatrix}
+u \\ v \\ 0
+\end{bmatrix},
+\]
+and angular velocity
+\[
+\boldsymbol{\omega} =
+\begin{bmatrix}
+0 \\ 0 \\ r
+\end{bmatrix}.
+\]
+
+The body-frame form of Newton's second law is:
+\[
+\dot{\mathbf{p}} + \boldsymbol{\omega} \times \mathbf{p} = \mathbf{f}.
+\]
+The cross product yields:
+\[
+\boldsymbol{\omega} \times \mathbf{p} =
+\begin{bmatrix}
+-mvr \\
+mur \\
+0
+\end{bmatrix}.
+\]
+
+Substituting gives:
+\begin{align}
+m\dot{u} - mvr &= X, \\
+m\dot{v} + mur &= Y.
+\end{align}
+
+\paragraph{Angular Momentum}
+For yaw, we have:
+\[
+I_z \dot{r} = N.
+\]
+
+\subsubsection{Hydrodynamic Damping and Linearization}
+The surrounding water exerts resistive forces that oppose motion. These forces depend on the vessel velocity and are modeled using linear and quadratic damping terms.
+
+\paragraph{Surge damping} is modeled as:
+\[
+X_D = -X_u u - X_{uu} |u|u,
+\]
+where:
+\begin{itemize}
+  \item \( X_u \) is the linear surge damping coefficient,
+  \item \( X_{uu} \) is the quadratic surge damping coefficient.
+\end{itemize}
+The total surge force is then:
+\[
+X = T\cos\delta + X_D = T\cos\delta - X_u u - X_{uu}|u|u.
+\]
+
+\paragraph{Substitution into equations of motion}
+The full surge equation becomes:
+\[
+m\dot{u} - mvr = T\cos\delta - X_u u - X_{uu}|u|u,
+\]
+so that:
+\[
+\dot{u} = \frac{1}{m} \left( T\cos\delta - X_u u - X_{uu} |u|u + mvr \right).
+\]
+
+\paragraph{Sway and yaw damping} are similarly modeled as:
+\begin{align*}
+Y_D &= -Y_v v - Y_r r, \\
+N_D &= -N_v v - N_r r,
+\end{align*}
+and included in the equations:
+\begin{align}
+\dot{v} &= \frac{1}{m} \left( T\sin\delta - Y_v v - Y_r r - mur \right), \\
+\dot{r} &= \frac{1}{I_z} \left( -\ell T \sin\delta - N_v v - N_r r \right).
+\end{align}
+
+\paragraph{Linearization}
+For small velocities, we can approximate:
+\[
+X_D \approx -X_u u,
+\]
+since \( |u|u \approx 0 \) near \( u = 0 \). This gives a linear damping model:
+\[
+m\dot{u} - mvr \approx T\cos\delta - X_u u.
+\]
+
+This is useful in linear control design (e.g. LQR). For higher speeds, the full nonlinear damping model must be retained.
+
+\paragraph{Example}
+Let:
+\[
+X_u = 5.0, \quad X_{uu} = 1.0, \quad u = 2.0 \, \si{m/s}.
+\]
+Then:
+\[
+X_D = -5\cdot 2 - 1\cdot |2|\cdot 2 = -10 - 4 = -14 \, \si{N}.
+\]
+
+\subsubsection{Final Model Summary}
+The complete 3 DOF model consists of:
+\begin{itemize}
+  \item Kinematic equations:
+  \[
+  \begin{aligned}
   \dot{x} &= u\cos\psi - v\sin\psi, \\
   \dot{y} &= u\sin\psi + v\cos\psi, \\
-  \dot{\psi} &= r.
-\end{align}
+  \dot{\psi} &= r,
+  \end{aligned}
+  \]
+  \item Dynamic equations with damping:
+  \[
+  \begin{aligned}
+  \dot{u} &= \frac{1}{m} \left( T\cos\delta - X_u u - X_{uu}|u|u + mvr \right), \\
+  \dot{v} &= \frac{1}{m} \left( T\sin\delta - Y_v v - Y_r r - mur \right), \\
+  \dot{r} &= \frac{1}{I_z} \left( -\ell T \sin\delta - N_v v - N_r r \right).
+  \end{aligned}
+  \]
+\end{itemize}
 
-\subsubsection{Input mapping}
-The simulator treats the rotor command as thrust magnitude $T$ and steering
-angle $\delta$. These are mapped into generalized forces in surge/sway and yaw:
-\begin{align}
-  X &= T\cos\delta,\\
-  Y &= T\sin\delta,\\
-  N &= -\ell\,Y,
-\end{align}
-where $\ell > 0$ is the distance from the center of gravity to the rotor along
-$+x$ (rotor located at $x=-\ell$).
-
-\subsubsection{Dynamics}
-The planar equations of motion are written in the standard marine-craft form
-\begin{align}
-  m\dot{u} - mvr &= X - X_u u - X_{uu}|u|u, \\
-  m\dot{v} + mur &= Y - Y_v v - Y_r r, \\
-  I_z\dot{r} &= N - N_v v - N_r r.
-\end{align}
-For numerical integration the implementation evaluates the explicit derivatives
-\begin{align}
-  \dot{u} &= \frac{1}{m}\left(X - X_u u - X_{uu}|u|u + mvr\right), \\
-  \dot{v} &= \frac{1}{m}\left(Y - Y_v v - Y_r r - mur\right), \\
-  \dot{r} &= \frac{1}{I_z}\left(N - N_v v - N_r r\right).
-\end{align}
-
-\subsubsection{Force diagram}
-\Cref{fig:forces} summarizes the sign conventions and the thrust decomposition.
-\begin{figure}[h]
-  \centering
-  \begin{tikzpicture}[>=Latex,scale=1.05]
-    % Hull rectangle (body frame)
-    \draw[thick] (-1.8,-0.5) rectangle (1.8,0.5);
-    \node[anchor=west] at (1.85,0) {bow};
-
-    % Body axes at CG
-    \draw[->,thick] (0,0) -- (1.4,0) node[below] {$+x$};
-    \draw[->,thick] (0,0) -- (0,1.2) node[left] {$+y$};
-
-    % Rotor at stern: x = -l
-    \def\ell{1.2}
-    \coordinate (rotor) at (-\ell,0);
-    \fill (rotor) circle (1.6pt);
-    \draw[dashed] (0,0) -- (rotor);
-    \node[anchor=north east] at (rotor) {rotor};
-    \node at (-0.6,0.18) {$\ell$};
-
-    % Thrust vector at delta
-    \def\delta{30} % degrees
-    \def\T{1.6}    % length scale
-    \pgfmathsetmacro{\dx}{\T*cos(\delta)}
-    \pgfmathsetmacro{\dy}{\T*sin(\delta)}
-    \draw[->,very thick,blue] (rotor) -- ++(\delta:\T) node[above right] {$T$};
-
-    % Components X and Y
-    \draw[->,thick,orange] (rotor) -- ++(0:\dx) node[below] {$X=T\cos\delta$};
-    \draw[->,thick,green!60!black] ($(rotor)+(0:\dx)$) -- ++(90:\dy)
-      node[right] {$Y=T\sin\delta$};
-
-    % Delta arc
-    \draw[blue] ($(rotor)+(0.45,0)$) arc (0:\delta:0.45);
-    \node[blue] at ($(rotor)+(0.65,0.28)$) {$\delta$};
-
-    % Yaw moment about CG
-    \draw[->,thick,red] (0.2,-0.9) arc (-40:220:0.35);
-    \node[red] at (0.75,-0.9) {$N=-\ell\,Y$};
-  \end{tikzpicture}
-  \caption{Thrust decomposition and yaw moment sign convention used by the simulator.}
-  \label{fig:forces}
-\end{figure}
+\subsubsection{Relation to 6 DOF Models}
+This 3 DOF model is a direct restriction of the full 6 DOF marine craft dynamics, obtained by setting:
+\[
+z = \phi = \theta = 0, \qquad w = p = q = 0,
+\]
+and neglecting the associated forces and moments. The same coordinate frames and notational structure are retained, which allows the model to be upgraded to higher fidelity without rederiving the formulation.
 
 \subsection{Simulation node (\texttt{sim\_node.py})}
 The simulator node integrates the continuous-time ODE using RK4 with timestep

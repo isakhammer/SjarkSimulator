@@ -7,3 +7,13 @@ latex/output/
 .agent_md/
 
 **/__pycache__/
+
+latex/main.aux
+latex/main.fdb_latexmk
+latex/main.fls
+latex/main.lof
+latex/main.log
+latex/main.out
+latex/main.pdf
+latex/main.synctex.gz
+latex/main.toc
