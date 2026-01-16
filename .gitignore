@@ -3,6 +3,7 @@
 **/build/
 **/install/
 **/log/
+latex/output/
 .agent_md/
 
 **/__pycache__/
