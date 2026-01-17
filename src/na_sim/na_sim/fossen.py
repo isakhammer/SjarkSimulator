@@ -14,9 +14,15 @@ and quaternion-based attitude kinematics.
 
 from __future__ import annotations
 
+import math
 from typing import Iterable, Optional
 
 import numpy as np
+
+try:
+    from scipy.spatial.transform import Rotation as _SciPyRotation
+except Exception:
+    _SciPyRotation = None
 
 GRAVITY_MPS2 = 9.81
 
@@ -157,6 +163,113 @@ def rotation_matrix_from_quaternion_wxyz(quaternion_wxyz: Iterable[float]) -> np
         ],
         dtype=float,
     )
+
+
+def quaternion_multiply_wxyz(lhs_wxyz: Iterable[float], rhs_wxyz: Iterable[float]) -> np.ndarray:
+    """Return the Hamilton product lhs ⊗ rhs for wxyz quaternions."""
+    left = np.asarray(lhs_wxyz, dtype=float).reshape(4,)
+    right = np.asarray(rhs_wxyz, dtype=float).reshape(4,)
+    lw, lx, ly, lz = (float(left[0]), float(left[1]), float(left[2]), float(left[3]))
+    rw, rx, ry, rz = (float(right[0]), float(right[1]), float(right[2]), float(right[3]))
+    return np.array(
+        [
+            lw * rw - lx * rx - ly * ry - lz * rz,
+            lw * rx + lx * rw + ly * rz - lz * ry,
+            lw * ry - lx * rz + ly * rw + lz * rx,
+            lw * rz + lx * ry - ly * rx + lz * rw,
+        ],
+        dtype=float,
+    )
+
+
+def quaternion_expmap_wxyz(omega_pqr: Iterable[float], dt: float) -> np.ndarray:
+    """Return a delta quaternion for constant body rate omega over dt."""
+    omega = np.asarray(omega_pqr, dtype=float).reshape(3,)
+    theta = float(np.linalg.norm(omega)) * float(dt)
+    if theta < 1e-12:
+        return np.array(
+            [1.0, 0.5 * omega[0] * dt, 0.5 * omega[1] * dt, 0.5 * omega[2] * dt],
+            dtype=float,
+        )
+    axis = omega / float(np.linalg.norm(omega))
+    half = 0.5 * theta
+    return np.array(
+        [math.cos(half), *(math.sin(half) * axis)],
+        dtype=float,
+    )
+
+
+def integrate_quaternion_euler(
+    quaternion_wxyz: Iterable[float], omega_pqr: Iterable[float], dt: float, normalize: bool = True
+) -> np.ndarray:
+    """Integrate quaternion using forward Euler on q_dot."""
+    q = np.asarray(quaternion_wxyz, dtype=float).reshape(4,)
+    q_next = q + float(dt) * quaternion_derivative_wxyz(q, omega_pqr)
+    return normalize_quaternion_wxyz(q_next) if normalize else q_next
+
+
+def integrate_quaternion_rk4(
+    quaternion_wxyz: Iterable[float], omega_pqr: Iterable[float], dt: float
+) -> np.ndarray:
+    """Integrate quaternion using RK4 with normalization."""
+    q = np.asarray(quaternion_wxyz, dtype=float).reshape(4,)
+    k1 = quaternion_derivative_wxyz(q, omega_pqr)
+    k2 = quaternion_derivative_wxyz(q + 0.5 * float(dt) * k1, omega_pqr)
+    k3 = quaternion_derivative_wxyz(q + 0.5 * float(dt) * k2, omega_pqr)
+    k4 = quaternion_derivative_wxyz(q + float(dt) * k3, omega_pqr)
+    q_next = q + float(dt) * (k1 + 2 * k2 + 2 * k3 + k4) / 6.0
+    return normalize_quaternion_wxyz(q_next)
+
+
+def integrate_quaternion_expmap(
+    quaternion_wxyz: Iterable[float], omega_pqr: Iterable[float], dt: float
+) -> np.ndarray:
+    """Integrate quaternion using the exponential map (SO(3) exact for constant omega)."""
+    q = np.asarray(quaternion_wxyz, dtype=float).reshape(4,)
+    dq = quaternion_expmap_wxyz(omega_pqr, dt)
+    q_next = quaternion_multiply_wxyz(dq, q)
+    return normalize_quaternion_wxyz(q_next)
+
+
+def integrate_quaternion_scipy_expmap(
+    quaternion_wxyz: Iterable[float], omega_pqr: Iterable[float], dt: float
+) -> np.ndarray:
+    """Integrate quaternion using SciPy Rotation (requires scipy)."""
+    if _SciPyRotation is None:
+        raise RuntimeError("SciPy not available for expmap integration.")
+    q = np.asarray(quaternion_wxyz, dtype=float).reshape(4,)
+    omega = np.asarray(omega_pqr, dtype=float).reshape(3,)
+    delta = _SciPyRotation.from_rotvec(omega * float(dt))
+    rot = _SciPyRotation.from_quat([q[1], q[2], q[3], q[0]])
+    q_next = (delta * rot).as_quat()
+    return normalize_quaternion_wxyz([q_next[3], q_next[0], q_next[1], q_next[2]])
+
+
+def so3_exp(omega_pqr: Iterable[float], dt: float) -> np.ndarray:
+    """Return exp([omega]_x dt) using Rodrigues' formula."""
+    omega = np.asarray(omega_pqr, dtype=float).reshape(3,)
+    theta = float(np.linalg.norm(omega)) * float(dt)
+    if theta < 1e-12:
+        return np.eye(3, dtype=float) + skew(omega * dt)
+    k = omega / float(np.linalg.norm(omega))
+    kx = skew(k)
+    return np.eye(3, dtype=float) + math.sin(theta) * kx + (1.0 - math.cos(theta)) * (kx @ kx)
+
+
+def integrate_rotation_matrix_euler(
+    rotation_body_to_world: np.ndarray, omega_pqr: Iterable[float], dt: float
+) -> np.ndarray:
+    """Integrate rotation matrix using forward Euler on R_dot = R[omega]_x."""
+    r = np.asarray(rotation_body_to_world, dtype=float).reshape(3, 3)
+    return r + float(dt) * (r @ skew(omega_pqr))
+
+
+def integrate_rotation_matrix_expm(
+    rotation_body_to_world: np.ndarray, omega_pqr: Iterable[float], dt: float
+) -> np.ndarray:
+    """Integrate rotation matrix using the exponential map (SO(3) exact)."""
+    r = np.asarray(rotation_body_to_world, dtype=float).reshape(3, 3)
+    return r @ so3_exp(omega_pqr, dt)
 
 
 def restoring_forces_body(
@@ -339,3 +452,55 @@ class Fossen6DOF:
             tau_env=tau_env,
         )
         return np.hstack((kin, nu_dot)).astype(float)
+
+    def step(
+        self,
+        state: np.ndarray,
+        tau: np.ndarray,
+        dt: float,
+        method: str = "rk4",
+        nu_c: Optional[np.ndarray] = None,
+        nu_c_dot: Optional[np.ndarray] = None,
+        tau_env: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
+        """
+        Advance the 6-DOF state using the selected integration method.
+
+        Methods: "euler", "rk4", "expmap" (RK4 for p,nu + expmap for attitude).
+        """
+        x = np.asarray(state, dtype=float).reshape(13,)
+        if method == "euler":
+            dx = self.state_derivative(x, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env)
+            x_next = x + float(dt) * dx
+            x_next[3:7] = normalize_quaternion_wxyz(x_next[3:7])
+            return x_next
+        if method == "rk4":
+            k1 = self.state_derivative(x, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env)
+            k2 = self.state_derivative(
+                x + 0.5 * float(dt) * k1, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env
+            )
+            k3 = self.state_derivative(
+                x + 0.5 * float(dt) * k2, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env
+            )
+            k4 = self.state_derivative(
+                x + float(dt) * k3, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env
+            )
+            x_next = x + float(dt) * (k1 + 2 * k2 + 2 * k3 + k4) / 6.0
+            x_next[3:7] = normalize_quaternion_wxyz(x_next[3:7])
+            return x_next
+        if method == "expmap":
+            k1 = self.state_derivative(x, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env)
+            k2 = self.state_derivative(
+                x + 0.5 * float(dt) * k1, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env
+            )
+            k3 = self.state_derivative(
+                x + 0.5 * float(dt) * k2, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env
+            )
+            k4 = self.state_derivative(
+                x + float(dt) * k3, tau, nu_c=nu_c, nu_c_dot=nu_c_dot, tau_env=tau_env
+            )
+            x_next = x + float(dt) * (k1 + 2 * k2 + 2 * k3 + k4) / 6.0
+            omega_avg = (k1[10:] + 2 * k2[10:] + 2 * k3[10:] + k4[10:]) / 6.0
+            x_next[3:7] = integrate_quaternion_expmap(x[3:7], omega_avg, dt)
+            return x_next
+        raise ValueError(f"Unknown integration method: {method}")
