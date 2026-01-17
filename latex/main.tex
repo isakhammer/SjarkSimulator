@@ -76,26 +76,134 @@ The stack is a minimal closed loop:
   \label{fig:architecture}
 \end{figure}
 
-\section{Frames, signals, and conventions}
-The simulator uses a planar world frame \emph{map} and a body frame \emph{base\_link}:
-\begin{itemize}
-  \item $x,y$ are inertial positions in the map frame (meters).
-  \item $\psi$ is the heading/yaw angle (radians, CCW positive).
-  \item $u,v$ are body-frame surge/sway velocities (m/s).
-  \item $r$ is yaw rate (rad/s).
-\end{itemize}
+\section{Definitions}
+\label{sec:definitions}
+This section is the single source of truth for frames, symbols, and sign
+conventions used throughout the document.
 
-The actuator is a stern-mounted steerable rotor producing a thrust magnitude $T$
-and an angle $\delta$ relative to body $+x$ (positive CCW). With a positive arm
-$\ell > 0$ and the rotor located at $x=-\ell$, the yaw moment is
-$N=-\ell\,T\sin\delta$, so positive $\delta$ produces a clockwise (negative) yaw
-moment.
+\subsection{Frames and axes}
+The simulator uses a world frame $\{W\}$ and a body frame $\{B\}$, corresponding
+to ROS~2 \texttt{map} and \texttt{base\_link}, respectively.
+\begin{itemize}
+  \item $\{W\}$ is inertial and right-handed; $+z_W$ points upward.
+  \item $\{B\}$ is body-fixed and right-handed; $+x_B$ points forward, $+y_B$
+    points to port (left), and $+z_B$ points upward.
+\end{itemize}
+All angles follow the right-hand rule. The yaw angle $\psi$ is a rotation about
+$+z_W$; positive yaw is counter-clockwise when viewed from above.
+
+\paragraph{Marine-convention note.}
+Fossen and much of the marine literature use NED/FRD conventions (world $z$
+down, body $y$ starboard, body $z$ down). This document and the current ROS~2
+implementation use ENU/FLU-style conventions to match standard ROS frames. When
+comparing formulas, the following constant transforms are useful:
+\[
+  \mathbf{T}_{\mathrm{ENU}\leftarrow\mathrm{NED}} =
+  \begin{bmatrix}
+    0 & 1 & 0 \\
+    1 & 0 & 0 \\
+    0 & 0 & -1
+  \end{bmatrix}, \qquad
+  \mathbf{T}_{\mathrm{FLU}\leftarrow\mathrm{FRD}} =
+  \begin{bmatrix}
+    1 & 0 & 0 \\
+    0 & -1 & 0 \\
+    0 & 0 & -1
+  \end{bmatrix}.
+\]
+
+\subsection{State, inputs, and generalized forces}
+We split vessel pose and velocity using standard marine craft notation:
+\begin{align*}
+  \boldsymbol{\eta} &=
+  \begin{bmatrix}
+    x & y & z & \phi & \theta & \psi
+  \end{bmatrix}^\top, &
+  \boldsymbol{\nu} &=
+  \begin{bmatrix}
+    u & v & w & p & q & r
+  \end{bmatrix}^\top,
+\end{align*}
+where $(x,y,z,\phi,\theta,\psi)$ are expressed in $\{W\}$ and $(u,v,w,p,q,r)$ in
+$\{B\}$. The current simulator is planar (3~DOF) and uses:
+\[
+  \boldsymbol{\eta}_3 =
+  \begin{bmatrix}
+    x & y & \psi
+  \end{bmatrix}^\top, \qquad
+  \boldsymbol{\nu}_3 =
+  \begin{bmatrix}
+    u & v & r
+  \end{bmatrix}^\top.
+\]
+
+The control input is a stern-mounted steerable rotor producing a thrust
+magnitude $T$ and a steering angle $\delta$ relative to $+x_B$ (positive CCW).
+Generalized forces and moments are collected in
+$\boldsymbol{\tau}=[X,Y,Z,K,M,N]^\top$ (body frame). The planar simulator uses
+$\boldsymbol{\tau}_3=[X,Y,N]^\top$.
+
+\subsection{Units and core symbols}
+\begin{table}[h]
+  \centering
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Symbol & Meaning & Frame & Units \\
+    \midrule
+    $x,y,z$ & Position of the body origin & $\{W\}$ & \si{\meter} \\
+    $\phi,\theta,\psi$ & Roll, pitch, yaw (ZYX) & $\{W\}$ & \si{\radian} \\
+    $u,v,w$ & Linear velocity & $\{B\}$ & \si{\meter\per\second} \\
+    $p,q,r$ & Angular velocity & $\{B\}$ & \si{\radian\per\second} \\
+    $T$ & Thrust magnitude & $\{B\}$ & \si{\newton} \\
+    $\delta$ & Steering angle (about $+z_B$) & $\{B\}$ & \si{\radian} \\
+    $\ell$ & Rotor arm (rotor at $x_B=-\ell$) & $\{B\}$ & \si{\meter} \\
+    $X,Y,Z$ & Forces & $\{B\}$ & \si{\newton} \\
+    $K,M,N$ & Moments & $\{B\}$ & \si{\newton\meter} \\
+    $m$ & Mass & -- & \si{\kilogram} \\
+    $I_z$ & Yaw moment of inertia & -- & \si{\kilogram\meter\squared} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Core symbols and units used by the vessel models.}
+  \label{tab:defs_units}
+\end{table}
+
+\subsection{Common vectors and matrices}
+\begin{table}[h]
+  \centering
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Name & Definition & Dimensions \\
+    \midrule
+    $\boldsymbol{\eta}$ & $[x,y,z,\phi,\theta,\psi]^\top$ & $6\times 1$ \\
+    $\boldsymbol{\nu}$ & $[u,v,w,p,q,r]^\top$ & $6\times 1$ \\
+    $\boldsymbol{\tau}$ & $[X,Y,Z,K,M,N]^\top$ & $6\times 1$ \\
+    $[\mathbf{a}]_\times$ & $\mathbf{a}\times\mathbf{b}=[\mathbf{a}]_\times\mathbf{b}$ & $3\times 3$ \\
+    $\mathbf{R}(\cdot)$ & Body-to-world rotation & $3\times 3$ \\
+    $\mathbf{J}(\boldsymbol{\eta})$ & Kinematic transform in $\dot{\boldsymbol{\eta}}=\mathbf{J}\boldsymbol{\nu}$ & $6\times 6$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{Common vectors and matrices.}
+  \label{tab:defs_common}
+\end{table}
+
+\subsection{Operators}
+For $\mathbf{a}=[a_x,a_y,a_z]^\top$, define the cross-product (skew) operator:
+\[
+  [\mathbf{a}]_\times =
+  \begin{bmatrix}
+    0 & -a_z & a_y \\
+    a_z & 0 & -a_x \\
+    -a_y & a_x & 0
+  \end{bmatrix}, \qquad
+  \mathbf{a}\times\mathbf{b} = [\mathbf{a}]_\times \mathbf{b}.
+\]
 
 \subsection{Notation collisions}
 The code uses $u$ for both surge velocity (a standard marine convention) and the
-spline's internal unitless parameter. In the text we will write the spline
-parameter as $u_{\mathrm{spline}}$ when needed; the arc-length parameter is
-denoted $t$ (meters), consistent with \texttt{BSplinePath}.
+spline's internal unitless parameter. In the text we write the spline parameter
+as $u_{\mathrm{spline}}$ when needed; the arc-length parameter is denoted $t$
+(meters), consistent with \texttt{BSplinePath}. Time derivatives use dot
+notation, e.g.\ $\dot{x}$.
 \clearpage
 \section{Planning (path generation)}
 \subsection{Published message: \texttt{na\_msg/BsplinePath}}
@@ -387,234 +495,405 @@ discontinuities.
 \end{itemize}
 \clearpage
 \section{Simulator}
-\subsection{Three Degree of Freedom Vessel Model}
-
-\subsubsection{Motivation and Scope}
-This simulator models the motion of a small surface vessel in two dimensions, focusing on its behavior in the horizontal plane. For tasks such as path following, obstacle avoidance, and low-speed maneuvering, the dominant dynamics are those governing planar motion—namely translation in the forward and lateral directions, and rotation about the vertical axis. Vertical motion and angular attitude dynamics (heave, roll, and pitch) are typically negligible in this regime and are therefore excluded for simplicity.
-
-We adopt a classical three degree of freedom (3 DOF) rigid body model capturing surge (forward motion), sway (sideways motion), and yaw (heading rate). This model serves as a physically meaningful baseline that is easy to implement, fast to simulate, and compatible with later extensions to full six degree of freedom models.
-
-\subsubsection{Coordinate Frames}
-We define two coordinate frames:
+\subsection{Vessel dynamics (implemented: 3~DOF)}
+\subsubsection{Assumptions}
 \begin{itemize}
-  \item The \textbf{world frame} $\{W\}$ is a fixed inertial frame with horizontal axes $x$ and $y$, and vertical axis $z$ pointing upward.
-  \item The \textbf{body frame} $\{B\}$ is attached to the vessel at its center of gravity. The body $x$ axis points forward along the vessel's longitudinal axis, the $y$ axis points to starboard, and the $z$ axis points downward, following the marine convention.
+  \item Planar motion: $z=\phi=\theta=0$ and $w=p=q=0$.
+  \item Constant mass properties with the body frame origin at the center of
+    gravity (CG).
+  \item Calm water: no current, wind, or wave loads.
+  \item Hydrodynamics captured by low-order damping terms.
 \end{itemize}
 
-The vessel's heading angle $\psi$ defines the rotation of the body frame relative to the world frame, measured from the world $x$ axis to the body $x$ axis in the horizontal plane.
+\subsubsection{Purpose}
+Given state $\mathbf{x}=[x,y,\psi,u,v,r]^\top$ and actuator inputs $(T,\delta)$,
+compute $\dot{\mathbf{x}}$ for time integration in \texttt{sim\_node.py}.
 
-\subsubsection{Degrees of Freedom: Surge, Sway, and Yaw}
-The motion of the vessel is described using three degrees of freedom:
-\begin{itemize}
-  \item \textbf{Surge} (\( u \)) is the translational velocity in the forward direction (along the body $x$ axis).
-  \item \textbf{Sway} (\( v \)) is the lateral velocity toward starboard (along the body $y$ axis).
-  \item \textbf{Yaw} (\( r \)) is the angular velocity about the vertical axis (body $z$ axis), corresponding to changes in heading.
-\end{itemize}
-
-These three motions define the 3 DOF configuration of the vessel in the horizontal plane.
-
-\subsubsection{State Variables}
-The vessel state is split into pose and velocity:
-\begin{align*}
-\boldsymbol{\eta} &=
-\begin{bmatrix}
-x \\ y \\ \psi
-\end{bmatrix}, \quad \text{position and heading in world frame}, \\
-\boldsymbol{\nu} &=
-\begin{bmatrix}
-u \\ v \\ r
-\end{bmatrix}, \quad \text{velocities in body frame}.
-\end{align*}
-The complete simulator state vector is:
+\subsubsection{Model}
+Collect pose and velocity as $\boldsymbol{\eta}_3=[x,y,\psi]^\top$ and
+$\boldsymbol{\nu}_3=[u,v,r]^\top$. The kinematics are:
 \[
-\mathbf{x} =
-\begin{bmatrix}
-\boldsymbol{\eta} \\
-\boldsymbol{\nu}
-\end{bmatrix}
-=
-\begin{bmatrix}
-x \\ y \\ \psi \\ u \\ v \\ r
-\end{bmatrix}.
+  \dot{\boldsymbol{\eta}}_3 = \mathbf{J}(\psi)\boldsymbol{\nu}_3, \qquad
+  \mathbf{J}(\psi) =
+  \begin{bmatrix}
+    \cos\psi & -\sin\psi & 0 \\
+    \sin\psi &  \cos\psi & 0 \\
+    0        &  0        & 1
+  \end{bmatrix},
 \]
-
-\subsubsection{Kinematics}
-To relate body-frame velocities to changes in world-frame position, we use a rotation matrix:
-\[
-\mathbf{R}(\psi) =
-\begin{bmatrix}
-\cos\psi & -\sin\psi & 0 \\
-\sin\psi &  \cos\psi & 0 \\
-0        &  0        & 1
-\end{bmatrix}.
-\]
-The kinematic equations are:
-\[
-\dot{\boldsymbol{\eta}} = \mathbf{R}(\psi)\boldsymbol{\nu},
-\]
-which yields:
+which expands to:
 \begin{align}
-\dot{x} &= u\cos\psi - v\sin\psi, \\
-\dot{y} &= u\sin\psi + v\cos\psi, \\
-\dot{\psi} &= r.
-\end{align}
-
-\subsubsection{Actuation and Force Mapping}
-The vessel is actuated by a single steerable rotor located at a distance \( \ell \) behind the center of gravity, along the body $x$ axis. The control inputs are:
-\begin{itemize}
-  \item \( T \in \mathbb{R} \): thrust magnitude,
-  \item \( \delta \in \mathbb{R} \): steering angle relative to the body $x$ axis.
-\end{itemize}
-
-The thrust vector in the body frame is:
-\[
-\mathbf{f}_T =
-\begin{bmatrix}
-T\cos\delta \\
-T\sin\delta \\
-0
-\end{bmatrix}.
-\]
-
-The generalized force components become:
-\begin{align}
-X &= T\cos\delta, \quad \text{(surge)} \\
-Y &= T\sin\delta, \quad \text{(sway)} \\
-N &= -\ell \cdot Y = -\ell T \sin\delta, \quad \text{(yaw moment)}.
-\end{align}
-
-\subsubsection{Rigid Body Dynamics}
-We apply Newton–Euler equations in the body frame.
-
-\paragraph{Linear Momentum}
-The vessel has linear momentum
-\[
-\mathbf{p} = m
-\begin{bmatrix}
-u \\ v \\ 0
-\end{bmatrix},
-\]
-and angular velocity
-\[
-\boldsymbol{\omega} =
-\begin{bmatrix}
-0 \\ 0 \\ r
-\end{bmatrix}.
-\]
-
-The body-frame form of Newton's second law is:
-\[
-\dot{\mathbf{p}} + \boldsymbol{\omega} \times \mathbf{p} = \mathbf{f}.
-\]
-The cross product yields:
-\[
-\boldsymbol{\omega} \times \mathbf{p} =
-\begin{bmatrix}
--mvr \\
-mur \\
-0
-\end{bmatrix}.
-\]
-
-Substituting gives:
-\begin{align}
-m\dot{u} - mvr &= X, \\
-m\dot{v} + mur &= Y.
-\end{align}
-
-\paragraph{Angular Momentum}
-For yaw, we have:
-\[
-I_z \dot{r} = N.
-\]
-
-\subsubsection{Hydrodynamic Damping and Linearization}
-The surrounding water exerts resistive forces that oppose motion. These forces depend on the vessel velocity and are modeled using linear and quadratic damping terms.
-
-\paragraph{Surge damping} is modeled as:
-\[
-X_D = -X_u u - X_{uu} |u|u,
-\]
-where:
-\begin{itemize}
-  \item \( X_u \) is the linear surge damping coefficient,
-  \item \( X_{uu} \) is the quadratic surge damping coefficient.
-\end{itemize}
-The total surge force is then:
-\[
-X = T\cos\delta + X_D = T\cos\delta - X_u u - X_{uu}|u|u.
-\]
-
-\paragraph{Substitution into equations of motion}
-The full surge equation becomes:
-\[
-m\dot{u} - mvr = T\cos\delta - X_u u - X_{uu}|u|u,
-\]
-so that:
-\[
-\dot{u} = \frac{1}{m} \left( T\cos\delta - X_u u - X_{uu} |u|u + mvr \right).
-\]
-
-\paragraph{Sway and yaw damping} are similarly modeled as:
-\begin{align*}
-Y_D &= -Y_v v - Y_r r, \\
-N_D &= -N_v v - N_r r,
-\end{align*}
-and included in the equations:
-\begin{align}
-\dot{v} &= \frac{1}{m} \left( T\sin\delta - Y_v v - Y_r r - mur \right), \\
-\dot{r} &= \frac{1}{I_z} \left( -\ell T \sin\delta - N_v v - N_r r \right).
-\end{align}
-
-\paragraph{Linearization}
-For small velocities, we can approximate:
-\[
-X_D \approx -X_u u,
-\]
-since \( |u|u \approx 0 \) near \( u = 0 \). This gives a linear damping model:
-\[
-m\dot{u} - mvr \approx T\cos\delta - X_u u.
-\]
-
-This is useful in linear control design (e.g. LQR). For higher speeds, the full nonlinear damping model must be retained.
-
-\paragraph{Example}
-Let:
-\[
-X_u = 5.0, \quad X_{uu} = 1.0, \quad u = 2.0 \, \si{m/s}.
-\]
-Then:
-\[
-X_D = -5\cdot 2 - 1\cdot |2|\cdot 2 = -10 - 4 = -14 \, \si{N}.
-\]
-
-\subsubsection{Final Model Summary}
-The complete 3 DOF model consists of:
-\begin{itemize}
-  \item Kinematic equations:
-  \[
-  \begin{aligned}
   \dot{x} &= u\cos\psi - v\sin\psi, \\
   \dot{y} &= u\sin\psi + v\cos\psi, \\
-  \dot{\psi} &= r,
-  \end{aligned}
-  \]
-  \item Dynamic equations with damping:
-  \[
-  \begin{aligned}
-  \dot{u} &= \frac{1}{m} \left( T\cos\delta - X_u u - X_{uu}|u|u + mvr \right), \\
-  \dot{v} &= \frac{1}{m} \left( T\sin\delta - Y_v v - Y_r r - mur \right), \\
-  \dot{r} &= \frac{1}{I_z} \left( -\ell T \sin\delta - N_v v - N_r r \right).
-  \end{aligned}
-  \]
+  \dot{\psi} &= r.
+\end{align}
+
+\paragraph{Actuation mapping}
+The steerable rotor produces:
+\begin{align}
+  X &= T\cos\delta, &
+  Y &= T\sin\delta, &
+  N &= -\ell\,Y = -\ell\,T\sin\delta,
+\end{align}
+and the generalized input is $\boldsymbol{\tau}_3=[X,Y,N]^\top$.
+
+\paragraph{Dynamics (Fossen-style structure)}
+The planar equations are written in the standard marine craft form:
+\[
+  \mathbf{M}_3\dot{\boldsymbol{\nu}}_3 +
+  \mathbf{C}_3(\boldsymbol{\nu}_3)\boldsymbol{\nu}_3 +
+  \mathbf{d}_3(\boldsymbol{\nu}_3) = \boldsymbol{\tau}_3,
+\]
+with:
+\[
+  \mathbf{M}_3 = \mathrm{diag}(m,\,m,\,I_z), \qquad
+  \mathbf{C}_3(\boldsymbol{\nu}_3) =
+  \begin{bmatrix}
+    0 & 0 & -m v \\
+    0 & 0 &  m u \\
+    m v & -m u & 0
+  \end{bmatrix},
+\]
+and damping vector:
+\[
+  \mathbf{d}_3(\boldsymbol{\nu}_3) =
+  \begin{bmatrix}
+    X_u u + X_{uu}|u|u \\
+    Y_v v + Y_r r \\
+    N_v v + N_r r
+  \end{bmatrix}.
+\]
+Solving for $\dot{\boldsymbol{\nu}}_3$ yields:
+\begin{align}
+  \dot{u} &= \frac{1}{m}\!\left(X - X_u u - X_{uu}|u|u + mvr\right), \\
+  \dot{v} &= \frac{1}{m}\!\left(Y - Y_v v - Y_r r - mur\right), \\
+  \dot{r} &= \frac{1}{I_z}\!\left(N - N_v v - N_r r\right).
+\end{align}
+
+\subsubsection{Implementation mapping}
+\texttt{Boat3DOF.dynamics()} in \texttt{src/na\_sim/na\_sim/Boat3DOF.py} evaluates
+the kinematics, computes $(X,Y,N)$ from $(T,\delta)$, and applies the three
+equations above to return $\dot{\mathbf{x}}$.
+
+\subsection{Six degree of freedom marine craft model (Fossen, upgrade path)}
+\subsubsection{Assumptions}
+\begin{itemize}
+  \item The body frame origin is at the CG unless stated otherwise.
+  \item Mass properties are constant in time.
+  \item Added mass is treated as constant (or slowly varying) for implementation.
+  \item Hydrodynamic forces depend on the velocity relative to the water.
+  \item Environmental loads are grouped in $\boldsymbol{\tau}_{\mathrm{env}}$.
 \end{itemize}
 
-\subsubsection{Relation to 6 DOF Models}
-This 3 DOF model is a direct restriction of the full 6 DOF marine craft dynamics, obtained by setting:
+\subsubsection{Purpose}
+This subsection states the standard 6~DOF model used in Fossen-style marine
+craft simulation. It is not implemented in the current codebase, but it provides
+a consistent extension path from the 3~DOF model.
+
+\subsubsection{Kinematics}
+Let $\boldsymbol{\eta}=[x,y,z,\phi,\theta,\psi]^\top$ and
+$\boldsymbol{\nu}=[u,v,w,p,q,r]^\top$ as defined in \Cref{sec:definitions}. The
+6~DOF kinematics are:
 \[
-z = \phi = \theta = 0, \qquad w = p = q = 0,
+  \dot{\boldsymbol{\eta}} = \mathbf{J}(\boldsymbol{\eta})\boldsymbol{\nu}, \qquad
+  \mathbf{J}(\boldsymbol{\eta}) =
+  \begin{bmatrix}
+    \mathbf{R}(\phi,\theta,\psi) & \mathbf{0} \\
+    \mathbf{0} & \mathbf{T}(\phi,\theta)
+  \end{bmatrix}.
 \]
-and neglecting the associated forces and moments. The same coordinate frames and notational structure are retained, which allows the model to be upgraded to higher fidelity without rederiving the formulation.
+Using a $ZYX$ (roll--pitch--yaw) convention,
+$\mathbf{R}(\phi,\theta,\psi)=\mathbf{R}_z(\psi)\mathbf{R}_y(\theta)\mathbf{R}_x(\phi)$
+maps body linear velocity to world velocity. Define $c_\alpha=\cos\alpha$ and
+$s_\alpha=\sin\alpha$. Then:
+\[
+  \mathbf{R}(\phi,\theta,\psi) =
+  \begin{bmatrix}
+    c_\psi c_\theta &
+      c_\psi s_\theta s_\phi - s_\psi c_\phi &
+      c_\psi s_\theta c_\phi + s_\psi s_\phi \\
+    s_\psi c_\theta &
+      s_\psi s_\theta s_\phi + c_\psi c_\phi &
+      s_\psi s_\theta c_\phi - c_\psi s_\phi \\
+    -s_\theta &
+      c_\theta s_\phi &
+      c_\theta c_\phi
+  \end{bmatrix}.
+\]
+The matrix
+$\mathbf{T}(\phi,\theta)$ maps body angular velocity
+$\boldsymbol{\omega}=[p,q,r]^\top$ to Euler angle rates:
+\[
+  \begin{bmatrix}
+    \dot{\phi} \\ \dot{\theta} \\ \dot{\psi}
+  \end{bmatrix}
+  =
+  \mathbf{T}(\phi,\theta)
+  \begin{bmatrix}
+    p \\ q \\ r
+  \end{bmatrix}, \qquad
+  \mathbf{T}(\phi,\theta) =
+  \begin{bmatrix}
+    1 & \sin\phi\tan\theta & \cos\phi\tan\theta \\
+    0 & \cos\phi & -\sin\phi \\
+    0 & \sin\phi/\cos\theta & \cos\phi/\cos\theta
+  \end{bmatrix}.
+\]
+The mapping is singular at $\cos\theta=0$.
+
+\subsubsection{Attitude representation on $SO(3)$}
+Euler angles are compact and match many marine references, but the
+$\mathbf{T}(\phi,\theta)$ mapping becomes singular at $\theta=\pm\pi/2$.
+Surface-vessel motion typically has small roll/pitch, so Euler angles are often
+acceptable. For general 6~DOF simulation and ROS~2 integration, unit quaternions
+are typically the most robust choice.
+
+Let $\mathbf{q}_{WB}\in\mathbb{R}^4$ be a unit quaternion representing the
+rotation from $\{B\}$ to $\{W\}$, with components
+$\mathbf{q}_{WB}=[q_w,q_x,q_y,q_z]^\top$. Replace the Euler-angle kinematics by:
+\[
+  \dot{\mathbf{p}} =
+  \mathbf{R}(\mathbf{q}_{WB})\mathbf{v}, \qquad
+  \dot{\mathbf{q}}_{WB} = \frac{1}{2}\,\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}_{WB}, \qquad
+  \boldsymbol{\Omega}(\boldsymbol{\omega}) =
+  \begin{bmatrix}
+    0 & -p & -q & -r \\
+    p & 0 & r & -q \\
+    q & -r & 0 & p \\
+    r & q & -p & 0
+  \end{bmatrix}
+\]
+where $\mathbf{p}=[x,y,z]^\top$ is the world position, $\mathbf{v}=[u,v,w]^\top$
+is the body linear velocity, and $\boldsymbol{\omega}=[p,q,r]^\top$ is the body
+angular velocity from $\boldsymbol{\nu}$. Numerical
+integration should renormalize $\mathbf{q}_{WB}$ to unit length.
+
+The corresponding rotation matrix $\mathbf{R}(\mathbf{q}_{WB})$ is:
+\[
+  \mathbf{R}(\mathbf{q}_{WB}) =
+  \begin{bmatrix}
+    1 - 2(q_y^2+q_z^2) & 2(q_x q_y - q_z q_w) & 2(q_x q_z + q_y q_w) \\
+    2(q_x q_y + q_z q_w) & 1 - 2(q_x^2+q_z^2) & 2(q_y q_z - q_x q_w) \\
+    2(q_x q_z - q_y q_w) & 2(q_y q_z + q_x q_w) & 1 - 2(q_x^2+q_y^2)
+  \end{bmatrix}.
+\]
+
+If a rotation-matrix state is preferred, one can integrate
+$\dot{\mathbf{R}}=\mathbf{R}[\boldsymbol{\omega}]_\times$ and periodically
+re-orthonormalize $\mathbf{R}$, or use a Lie-group update
+$\mathbf{R}_{k+1}=\mathbf{R}_k\exp([\boldsymbol{\omega}\Delta t]_\times)$.
+
+ROS~2 messages store quaternions as $(x,y,z,w)$.
+
+\subsubsection{Dynamics}
+The standard 6~DOF equations of motion in a body-fixed frame are:
+\[
+  \mathbf{M}\dot{\boldsymbol{\nu}} +
+  \mathbf{C}(\boldsymbol{\nu})\boldsymbol{\nu} +
+  \mathbf{D}(\boldsymbol{\nu})\boldsymbol{\nu} +
+  \mathbf{g}(\boldsymbol{\eta})
+  = \boldsymbol{\tau} + \boldsymbol{\tau}_{\mathrm{env}}.
+\]
+The terms are:
+\begin{itemize}
+  \item $\mathbf{M}=\mathbf{M}_{RB}+\mathbf{M}_A$: rigid-body and added-mass
+    inertia (symmetric positive definite in typical operating regimes).
+  \item $\mathbf{C}(\boldsymbol{\nu})=\mathbf{C}_{RB}(\boldsymbol{\nu})+\mathbf{C}_A(\boldsymbol{\nu})$:
+    Coriolis/centripetal matrices associated with $\mathbf{M}_{RB}$ and
+    $\mathbf{M}_A$.
+  \item $\mathbf{D}(\boldsymbol{\nu})$: hydrodynamic damping (often split into
+    linear and quadratic components).
+  \item $\mathbf{g}(\boldsymbol{\eta})$: restoring forces and moments from
+    gravity and buoyancy.
+  \item $\boldsymbol{\tau}$: actuator generalized forces/moments in the body frame.
+  \item $\boldsymbol{\tau}_{\mathrm{env}}$: environmental loads (wind, waves,
+    current-induced loads, etc.).
+\end{itemize}
+
+\paragraph{Relative velocity and current}
+Hydrodynamic terms (added mass and damping) depend on the velocity relative to
+the water. Let $\mathbf{v}_c^W\in\mathbb{R}^3$ be the water current expressed in
+the world frame and assume it has no angular component. Define:
+\[
+  \mathbf{v}_c^B = \mathbf{R}^\top \mathbf{v}_c^W, \qquad
+  \boldsymbol{\nu}_c =
+  \begin{bmatrix}
+    \mathbf{v}_c^B \\
+    \mathbf{0}
+  \end{bmatrix}, \qquad
+  \boldsymbol{\nu}_r = \boldsymbol{\nu} - \boldsymbol{\nu}_c.
+\]
+In calm water, $\boldsymbol{\nu}_r=\boldsymbol{\nu}$. A common implementation is
+to evaluate $\mathbf{C}_A(\boldsymbol{\nu}_r)$ and $\mathbf{D}(\boldsymbol{\nu}_r)$
+using $\boldsymbol{\nu}_r$, while keeping the kinematics in terms of the
+earth-fixed velocity $\boldsymbol{\nu}$. If the current is time-varying, the
+term $\mathbf{M}_A \dot{\boldsymbol{\nu}}_c$ must be included on the right-hand
+side.
+
+\paragraph{Sign conventions for hydrodynamic coefficients}
+The simulator uses positive scalar coefficients with explicit minus signs (e.g.\
+$-X_u u$). Many hydrodynamic derivative tables use coefficients that already
+carry the sign (often negative). When importing parameters, map them into
+$\mathbf{M}_A$ and $\mathbf{D}$ so that $\mathbf{D}\boldsymbol{\nu}_r$ is
+dissipative (non-negative power) and $\mathbf{M}$ remains invertible.
+
+\paragraph{Rigid-body terms (origin at CG)}
+Let $\mathbf{v}=[u,v,w]^\top$ and $\boldsymbol{\omega}=[p,q,r]^\top$. With the
+body frame origin at the CG, the rigid-body inertia matrix is:
+\[
+  \mathbf{M}_{RB} =
+  \begin{bmatrix}
+    m\mathbf{I}_3 & \mathbf{0} \\
+    \mathbf{0} & \mathbf{I}
+  \end{bmatrix},
+\]
+where $\mathbf{I}\in\mathbb{R}^{3\times 3}$ is the inertia tensor about the CG,
+expressed in $\{B\}$. One energy-preserving choice of rigid-body Coriolis matrix is:
+\[
+  \mathbf{C}_{RB}(\boldsymbol{\nu}) =
+  \begin{bmatrix}
+    \mathbf{0} & -m[\mathbf{v}]_\times \\
+    -m[\mathbf{v}]_\times & -[\mathbf{I}\boldsymbol{\omega}]_\times
+  \end{bmatrix}.
+\]
+
+\paragraph{Coriolis construction from momentum (constant $\mathbf{M}$)}
+For implementation, it is useful to build Coriolis matrices using only the
+inertia matrix and generalized momentum. For any constant symmetric
+$\mathbf{M}\in\mathbb{R}^{6\times 6}$ (rigid-body or added mass), partition
+$\mathbf{M}$ into $3\times 3$ blocks and define:
+\[
+  \begin{bmatrix}
+    \mathbf{p} \\
+    \mathbf{h}
+  \end{bmatrix}
+  =
+  \mathbf{M}\boldsymbol{\nu}, \qquad
+  \mathbf{C}(\boldsymbol{\nu}) =
+  \begin{bmatrix}
+    \mathbf{0} & -[\mathbf{p}]_\times \\
+    -[\mathbf{p}]_\times & -[\mathbf{h}]_\times
+  \end{bmatrix}.
+\]
+This construction guarantees $\mathbf{C}^\top=-\mathbf{C}$ and
+$\boldsymbol{\nu}^\top \mathbf{C}\boldsymbol{\nu}=0$.
+
+\paragraph{Rigid-body terms (general origin offset)}
+If the body frame origin is not at the CG, let $\mathbf{r}_g$ be the vector from
+the origin to the CG expressed in $\{B\}$. Then:
+\[
+  \mathbf{M}_{RB} =
+  \begin{bmatrix}
+    m\mathbf{I}_3 & -m[\mathbf{r}_g]_\times \\
+    m[\mathbf{r}_g]_\times & \mathbf{I}
+  \end{bmatrix},
+\]
+and $\mathbf{C}_{RB}(\boldsymbol{\nu})$ must include $\mathbf{r}_g$-dependent
+coupling. Choosing the origin at the CG eliminates these terms and is
+recommended for implementation.
+
+\paragraph{Added mass terms (constant $\mathbf{M}_A$)}
+For low-speed simulation it is common to treat $\mathbf{M}_A$ as constant and
+symmetric. Partition:
+\[
+  \mathbf{M}_A =
+  \begin{bmatrix}
+    \mathbf{A}_{11} & \mathbf{A}_{12} \\
+    \mathbf{A}_{21} & \mathbf{A}_{22}
+  \end{bmatrix},
+\]
+and define the added-mass linear and angular momenta:
+\[
+  \mathbf{p}_A = \mathbf{A}_{11}\mathbf{v} + \mathbf{A}_{12}\boldsymbol{\omega}, \qquad
+  \mathbf{h}_A = \mathbf{A}_{21}\mathbf{v} + \mathbf{A}_{22}\boldsymbol{\omega}.
+\]
+An implementable energy-preserving Coriolis matrix associated with $\mathbf{M}_A$ is:
+\[
+  \mathbf{C}_A(\boldsymbol{\nu}) =
+  \begin{bmatrix}
+    \mathbf{0} & -[\mathbf{p}_A]_\times \\
+    -[\mathbf{p}_A]_\times & -[\mathbf{h}_A]_\times
+  \end{bmatrix}.
+\]
+
+\paragraph{Hydrodynamic damping}
+For implementation, a common split is:
+\[
+  \mathbf{D}(\boldsymbol{\nu})\boldsymbol{\nu}
+  =
+  \mathbf{D}_L \boldsymbol{\nu}
+  + \mathbf{D}_Q(\boldsymbol{\nu})\boldsymbol{\nu},
+\]
+where $\mathbf{D}_L$ is constant (linear damping) and $\mathbf{D}_Q(\boldsymbol{\nu})$
+is typically diagonal and depends on $|\boldsymbol{\nu}|$ (quadratic drag). More
+accurate models (e.g.\ crossflow drag) can be added without changing the overall
+structure.
+
+\paragraph{Restoring forces and moments}
+For surface vessels in planar motion, $\mathbf{g}(\boldsymbol{\eta})$ does not
+enter the surge/sway/yaw dynamics and is neglected in the current simulator. In
+full 6~DOF, $\mathbf{g}$ is computed from weight $W$, buoyancy $B$, and the CG
+and center-of-buoyancy offsets $\mathbf{r}_g,\mathbf{r}_b$ (expressed in
+$\{B\}$) via:
+\[
+  \mathbf{g}(\boldsymbol{\eta}) =
+  \begin{bmatrix}
+    \mathbf{R}^\top(\phi,\theta,\psi)
+    \begin{bmatrix} 0 \\ 0 \\ B-W \end{bmatrix} \\
+    [\mathbf{r}_g]_\times \mathbf{R}^\top(\phi,\theta,\psi)
+    \begin{bmatrix} 0 \\ 0 \\ -W \end{bmatrix}
+    +
+    [\mathbf{r}_b]_\times \mathbf{R}^\top(\phi,\theta,\psi)
+    \begin{bmatrix} 0 \\ 0 \\ B \end{bmatrix}
+  \end{bmatrix}.
+\]
+
+\subsubsection{Reduction to the implemented 3~DOF model}
+Setting $z=\phi=\theta=0$ and $w=p=q=0$ reduces the 6~DOF kinematics to
+$\dot{\boldsymbol{\eta}}_3=\mathbf{J}(\psi)\boldsymbol{\nu}_3$. Neglecting
+restoring terms and using diagonal $\mathbf{M}_3$ and the low-order damping
+vector $\mathbf{d}_3(\boldsymbol{\nu}_3)$ yields the exact 3~DOF model
+implemented in \texttt{Boat3DOF.py}.
+
+\subsubsection{Implementation mapping (6~DOF)}
+For a ROS~2 simulator, a common state choice is:
+\[
+  \mathbf{x}_{6} =
+  \begin{bmatrix}
+    \mathbf{p} \\
+    \mathbf{q}_{WB} \\
+    \boldsymbol{\nu}
+  \end{bmatrix}
+  \in \mathbb{R}^{13}.
+\]
+Given $\boldsymbol{\tau}$ from a thruster/actuator model and optional
+$\boldsymbol{\tau}_{\mathrm{env}}$, compute:
+\[
+  \dot{\mathbf{p}} = \mathbf{R}(\mathbf{q}_{WB})\mathbf{v}, \qquad
+  \dot{\mathbf{q}}_{WB} = \frac{1}{2}\,\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}_{WB}, \qquad
+  \dot{\boldsymbol{\nu}} = \mathbf{M}^{-1}\!\Big(
+    \boldsymbol{\tau}+\boldsymbol{\tau}_{\mathrm{env}}
+    - \mathbf{C}_{RB}(\boldsymbol{\nu})\boldsymbol{\nu}
+    - \mathbf{C}_{A}(\boldsymbol{\nu}_r)\boldsymbol{\nu}_r
+    - \mathbf{D}(\boldsymbol{\nu}_r)\boldsymbol{\nu}_r
+    - \mathbf{g}(\boldsymbol{\eta})
+    + \mathbf{M}_A \dot{\boldsymbol{\nu}}_c
+  \Big),
+\]
+and integrate with RK4. Normalize $\mathbf{q}_{WB}$ after each integration step.
+
+\subsubsection{Sanity checks (recommended tests)}
+The following checks catch most sign and frame mistakes before tuning:
+\begin{itemize}
+  \item $\mathbf{M}$ is symmetric and positive definite (all eigenvalues $>0$).
+  \item $\mathbf{C}_{RB}$ and $\mathbf{C}_A$ are skew-symmetric:
+    $\mathbf{C} + \mathbf{C}^\top = \mathbf{0}$.
+  \item Coriolis power is zero: $\boldsymbol{\nu}^\top \mathbf{C}\boldsymbol{\nu}=0$.
+  \item Damping is dissipative: $\boldsymbol{\nu}_r^\top \mathbf{D}\boldsymbol{\nu}_r \ge 0$.
+  \item Quaternion stays normalized: $\|\mathbf{q}_{WB}\|=1$ (after renormalization).
+\end{itemize}
+The repository includes these checks as unit tests in
+\texttt{src/na\_sim/test} to support future 6~DOF upgrades.
 
 \subsection{Simulation node (\texttt{sim\_node.py})}
 The simulator node integrates the continuous-time ODE using RK4 with timestep
@@ -638,14 +917,14 @@ The simulator publishes:
     \toprule
     Parameter & Default & Units & Meaning \\
     \midrule
-    \texttt{m} & 70.0 & \si{\kilogram} & Mass \\
-    \texttt{Iz} & 10.0 & \si{\kilogram\meter\squared} & Yaw inertia \\
-    \texttt{Xu} & 5.0 & -- & Linear surge damping \\
-    \texttt{Xuu} & 1.0 & -- & Quadratic surge damping \\
-    \texttt{Yv} & 40.0 & -- & Linear sway damping \\
-    \texttt{Yr} & 5.0 & -- & Yaw-rate to sway coupling \\
-    \texttt{Nv} & 5.0 & -- & Yaw moment from sway velocity \\
-    \texttt{Nr} & 40.0 & -- & Yaw rotational damping \\
+	    \texttt{m} & 70.0 & \si{\kilogram} & Mass \\
+	    \texttt{Iz} & 10.0 & \si{\kilogram\meter\squared} & Yaw inertia \\
+	    \texttt{Xu} & 5.0 & \si{\kilogram\per\second} & Linear surge damping \\
+	    \texttt{Xuu} & 1.0 & \si{\kilogram\per\meter} & Quadratic surge damping \\
+	    \texttt{Yv} & 40.0 & \si{\kilogram\per\second} & Linear sway damping \\
+	    \texttt{Yr} & 5.0 & \si{\newton\second} & Yaw-rate to sway coupling \\
+	    \texttt{Nv} & 5.0 & \si{\newton\second} & Yaw moment from sway velocity \\
+	    \texttt{Nr} & 40.0 & \si{\newton\meter\second} & Yaw rotational damping \\
     \texttt{l} & 0.5 & \si{\meter} & Rotor arm (positive scalar) \\
     \texttt{dt} & 0.02 & \si{\second} & Integration step \\
     \texttt{max\_thrust} & 40.0 & \si{\newton} & Thrust saturation \\
@@ -690,8 +969,8 @@ dependencies.
     namespacing requires explicit remapping for multi-vehicle setups.
   \item The simulator is planar with simplified damping and no environmental effects;
     it is not a high-fidelity hydrodynamic model.
-  \item Automated tests exist for the B-spline utilities, but the controller and
-    simulator currently lack direct unit tests.
+  \item Automated tests exist for the B-spline utilities and basic simulator
+    sign/consistency checks, but the controller still lacks direct unit tests.
 \end{itemize}
 
 \section{How this stays in sync with code}
