@@ -10,6 +10,7 @@ import pytest
 import rclpy
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32MultiArray
+from tf2_msgs.msg import TFMessage
 
 
 def _wait_for_message(node, topic, msg_type, timeout_sec, predicate=None):
@@ -38,6 +39,13 @@ def _quat_norm(orientation):
         + orientation.y * orientation.y
         + orientation.z * orientation.z
     )
+
+
+def _has_base_link_tf(msg):
+    for transform in msg.transforms:
+        if transform.child_frame_id == "base_link":
+            return True
+    return False
 
 
 @pytest.mark.launch_test
@@ -120,3 +128,9 @@ class TestSim6DofLaunch(unittest.TestCase):
             all(math.isfinite(value) for value in values),
             "Odometry twist contains non-finite values",
         )
+
+    def test_robot_state_publisher_tf(self):
+        msg = _wait_for_message(
+            self.node, "/tf", TFMessage, timeout_sec=5.0, predicate=_has_base_link_tf
+        )
+        self.assertIsNotNone(msg, "No TF with base_link received")
