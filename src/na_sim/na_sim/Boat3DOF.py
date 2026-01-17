@@ -22,7 +22,7 @@ GENERALIZED FORCES (X, Y, N):
             X = thrust * cos(delta)
 
     Y : Sway force   [N]
-        Lateral force along the +y axis.
+        Lateral force along the +y axis (port/left, ROS FLU).
         Computed from the rotor inputs as:
             Y = thrust * sin(delta)
 
@@ -52,10 +52,10 @@ STATE VECTOR:
 
     state = [x, y, psi, u, v, r]
 
-    x, y : Inertial position in world frame
+    x, y : Inertial position in world frame (ENU)
     psi  : Heading angle (yaw) [rad]
     u    : Surge velocity (forward) [m/s]
-    v    : Sway velocity (sideways) [m/s]
+    v    : Sway velocity (sideways, +y port/left) [m/s]
     r    : Yaw rate [rad/s]
 
 The model is sufficient for control system design, trajectory following,
