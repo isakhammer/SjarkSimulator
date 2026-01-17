@@ -15,3 +15,4 @@ The 6DOF simulator supports multiple attitude integrators and a small benchmark:
 
 6DOF launch example:
 - `ros2 launch na_launch sim_controller_6dof_launch.py`
+URDF is published via `robot_state_publisher` in the 6DOF launch.

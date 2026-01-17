@@ -25,6 +25,17 @@ def generate_launch_description():
         parameters=[{"config_path": config_path}],
     )
 
+    urdf_path = os.path.join(pkg_path, "urdf", "boat.urdf")
+    with open(urdf_path, "r", encoding="utf-8") as urdf_file:
+        robot_description = urdf_file.read()
+
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        name="robot_state_publisher",
+        parameters=[{"robot_description": robot_description}],
+    )
+
     return LaunchDescription([
         Node(
             package="na_controller",
@@ -43,4 +54,5 @@ def generate_launch_description():
             executable="planner_node",
             name="planner_node"
         ),
+        robot_state_publisher,
     ])
