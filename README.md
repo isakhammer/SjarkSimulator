@@ -12,3 +12,6 @@ The 6DOF simulator supports multiple attitude integrators and a small benchmark:
 - Benchmark tool: `PYTHONPATH=src/na_sim python3 src/na_sim/tools/benchmark_integrators.py`
 - Typical outcome: expmap on SO(3) preserves orthonormality best; RK4+normalize is accurate;
   Euler is fastest but drifts.
+
+6DOF launch example:
+- `ros2 launch na_launch sim_controller_6dof_launch.py`
