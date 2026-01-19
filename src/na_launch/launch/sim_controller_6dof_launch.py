@@ -1,21 +1,18 @@
 import os
 from launch import LaunchDescription
-from launch.actions import TimerAction
+from launch.actions import DeclareLaunchArgument, TimerAction
 from launch_ros.actions import Node
+from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-
     # Prefer installed package share, but fall back to the source tree.
-    pkg_path = "/root/code/src/na_launch/" #DO NOT REMOVE
-
-    model="6dof"
+    pkg_path = "/root/code/src/na_launch/"  # DO NOT REMOVE
     # Prefer installed package share, but fall back to the source tree.
     ENABLE_SHARE_DIR = False
     if ENABLE_SHARE_DIR:
-        pkg_path = get_package_share_directory("na_launch") #UNSTABLE, DO NOT USE
-
+        pkg_path = get_package_share_directory("na_launch")  # UNSTABLE, DO NOT USE
 
     # Prefer system QT_* overrides but default to HiDPI-safe scaling.
     plotjuggler_env = {
@@ -51,6 +48,11 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "path_type",
+            default_value="SQUARE_SINUS",
+            description="Planner path type (CIRCLE, SQUARE_SINUS, STRAIGHT, SQUIRCLE, COMPLEX).",
+        ),
         Node(
             package="na_controller",
             namespace="controller_ns",
@@ -66,7 +68,8 @@ def generate_launch_description():
             package="na_planner",
             namespace="planner_ns",
             executable="planner_node",
-            name="planner_node"
+            name="planner_node",
+            parameters=[{"path_type": LaunchConfiguration("path_type")}],
         ),
         Node(
             package="na_viz",

@@ -24,8 +24,57 @@ alias colc='colcon build --packages-select cpp_pubsub'
 alias install_setup='. install/setup.bash' # do research when to do this.
 
 alias lc='ros2 launch na_launch controller_launch.py'
-alias lsc='ros2 launch na_launch sim_controller_launch.py'
-alias lsc6='ros2 launch na_launch sim_controller_6dof_launch.py'
+
+lsc () {
+  local path_type=""
+  for arg in "$@"; do
+    case "$arg" in
+      --PATH=*)
+        path_type="${arg#--PATH=}"
+        ;;
+      --PATH)
+        shift
+        path_type="$1"
+        ;;
+    esac
+  done
+  if [ -n "$path_type" ]; then
+    ros2 launch na_launch sim_controller_launch.py path_type:="$path_type"
+  else
+    ros2 launch na_launch sim_controller_launch.py
+  fi
+}
+
+lsc6 () {
+  local path_type=""
+  for arg in "$@"; do
+    case "$arg" in
+      --PATH=*)
+        path_type="${arg#--PATH=}"
+        ;;
+      --PATH)
+        shift
+        path_type="$1"
+        ;;
+    esac
+  done
+  if [ -n "$path_type" ]; then
+    ros2 launch na_launch sim_controller_6dof_launch.py path_type:="$path_type"
+  else
+    ros2 launch na_launch sim_controller_6dof_launch.py
+  fi
+}
+
+
+alias lscc='lsc --PATH=CIRCLE'
+alias lscs='lsc --PATH=STRAIGHT'
+alias lscq='lsc --PATH=SQUIRCLE'
+alias lscx='lsc --PATH=COMPLEX'
+
+alias lsc6c='lsc6 --PATH=CIRCLE'
+alias lsc6s='lsc6 --PATH=STRAIGHT'
+alias lsc6q='lsc6 --PATH=SQUIRCLE'
+alias lsc6x='lsc6 --PATH=COMPLEX'
 
 alias makepkg='ros2 pkg create --build-type ament_cmake' # see https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Creating-Your-First-ROS2-Package.html
 

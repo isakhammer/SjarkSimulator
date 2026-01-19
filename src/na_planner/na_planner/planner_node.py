@@ -42,7 +42,7 @@ class PlannerPublisher(Node):
         path = BSplinePath.from_control_points(
             control, samples=preview_samples, closed=True, start_u=start_u
         )
-        return path.control_points, path.start_u
+        return path.control_points, path.start_u, True
 
     def get_square_sinus(
         self,
@@ -83,7 +83,67 @@ class PlannerPublisher(Node):
         path = BSplinePath.from_control_points(
             control, samples=preview_samples, closed=True, start_u=start_u
         )
-        return path.control_points, path.start_u
+        return path.control_points, path.start_u, True
+
+    def get_straight(
+        self,
+        length: float = 30.0,
+    ):
+        if length <= 0.0:
+            length = 30.0
+        half = length / 2.0
+        control = [(-half, 0.0), (-half / 3.0, 0.0), (half / 3.0, 0.0), (half, 0.0)]
+        return control, 0.0, False
+
+    def get_squircle(
+        self,
+        radius: float = 12.0,
+        exponent: float = 4.0,
+        control_points: int = 16,
+    ):
+        if radius <= 0.0:
+            radius = 12.0
+        n = max(4.0, float(exponent))
+        count = max(8, int(control_points))
+        angles = [2.0 * math.pi * i / count for i in range(count)]
+
+        def superellipse(coord):
+            if coord == 0.0:
+                return 0.0
+            return math.copysign(abs(coord) ** (2.0 / n), coord)
+
+        control = [
+            (
+                radius * superellipse(math.cos(a)),
+                radius * superellipse(math.sin(a)),
+            )
+            for a in angles
+        ]
+        samples_per_meter = float(self.get_parameter("samples_per_meter").value)
+        preview_samples = samples_from_density(control, samples_per_meter, closed=True)
+        control, start_u = self._align_path_to_origin(control, samples=preview_samples)
+        path = BSplinePath.from_control_points(
+            control, samples=preview_samples, closed=True, start_u=start_u
+        )
+        return path.control_points, path.start_u, True
+
+    def get_complex(
+        self,
+        scale: float = 12.0,
+        control_points: int = 20,
+    ):
+        if scale <= 0.0:
+            scale = 12.0
+        count = max(10, int(control_points))
+        angles = [2.0 * math.pi * i / count for i in range(count)]
+        control = [(scale * math.sin(a), scale * math.sin(a) * math.cos(a)) for a in angles]
+        samples_per_meter = float(self.get_parameter("samples_per_meter").value)
+        preview_samples = samples_from_density(control, samples_per_meter, closed=True)
+        control, start_u = self._align_path_to_origin(control, samples=preview_samples)
+        path = BSplinePath.from_control_points(
+            control, samples=preview_samples, closed=True, start_u=start_u
+        )
+        return path.control_points, path.start_u, True
 
     def _align_path_to_origin(self, control, samples: int = 400):
         # Anchor the lowest-y sample at the origin and align its heading with +x.
@@ -138,20 +198,26 @@ class PlannerPublisher(Node):
         path_type = str(self.get_parameter("path_type").value).strip().upper()
         path_type = path_type.replace("-", "_")
         if path_type == "CIRCLE":
-            control, start_u = self.get_circle()
+            control, start_u, closed = self.get_circle()
         elif path_type == "SQUARE_SINUS":
-            control, start_u = self.get_square_sinus()
+            control, start_u, closed = self.get_square_sinus()
+        elif path_type == "STRAIGHT":
+            control, start_u, closed = self.get_straight()
+        elif path_type == "SQUIRCLE":
+            control, start_u, closed = self.get_squircle()
+        elif path_type == "COMPLEX":
+            control, start_u, closed = self.get_complex()
         else:
             self.get_logger().warn(
                 f"Unknown path_type '{path_type}', using SQUARE_SINUS"
             )
-            control, start_u = self.get_square_sinus()
+            control, start_u, closed = self.get_square_sinus()
 
         msg.ctrl_x = [p[0] for p in control]
         msg.ctrl_y = [p[1] for p in control]
         msg.ctrl_z = [0.0 for _ in control]
         msg.degree = 3
-        msg.closed = True
+        msg.closed = bool(closed)
         msg.start_u = float(start_u)
 
         self.publisher_.publish(msg)
