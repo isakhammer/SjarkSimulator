@@ -25,6 +25,7 @@ alias install_setup='. install/setup.bash' # do research when to do this.
 
 alias lc='ros2 launch na_launch controller_launch.py'
 alias lsc='ros2 launch na_launch sim_controller_launch.py'
+alias lsc6='ros2 launch na_launch sim_controller_6dof_launch.py'
 
 alias makepkg='ros2 pkg create --build-type ament_cmake' # see https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Creating-Your-First-ROS2-Package.html
 
