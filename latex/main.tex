@@ -1,4 +1,4 @@
-\documentclass[11pt]{article}
+\documentclass[9pt]{article}
 
 \usepackage[a4paper,margin=25mm]{geometry}
 \usepackage{amsmath,amssymb}
@@ -8,7 +8,9 @@
 \usepackage[nameinlink,noabbrev]{cleveref}
 \usepackage{graphicx}
 \usepackage{tikz}
+\usepackage{pgfplots}
 \usetikzlibrary{arrows.meta,calc,positioning,shapes.geometric}
+\pgfplotsset{compat=1.18}
 
 \title{Nautomatic: Planning, Control \& Simulation Overview}
 \author{Nautomatic contributors}
@@ -204,6 +206,9 @@ For $\mathbf{a}=[a_x,a_y,a_z]^\top$, define the cross-product (skew) operator:
   \end{bmatrix}, \qquad
   \mathbf{a}\times\mathbf{b} = [\mathbf{a}]_\times \mathbf{b}.
 \]
+The matrix exponential $\exp([\mathbf{a}]_\times)$ maps the rotation vector
+$\mathbf{a}$ to a rotation in $SO(3)$ (Rodrigues' formula), and is used in the
+expmap update with $\mathbf{a}=\boldsymbol{\omega}\Delta t$.
 
 \subsection{Notation collisions}
 The code uses $u$ for both surge velocity (a standard marine convention) and the
@@ -601,19 +606,20 @@ craft simulation and matches the implementation in
 Let $\boldsymbol{\eta}=[x,y,z,\phi,\theta,\psi]^\top$ and
 $\boldsymbol{\nu}=[u,v,w,p,q,r]^\top$ as defined in \Cref{sec:definitions}. The
 6~DOF kinematics are:
-\[
+\begin{equation}
   \dot{\boldsymbol{\eta}} = \mathbf{J}(\boldsymbol{\eta})\boldsymbol{\nu}, \qquad
   \mathbf{J}(\boldsymbol{\eta}) =
   \begin{bmatrix}
     \mathbf{R}(\phi,\theta,\psi) & \mathbf{0} \\
     \mathbf{0} & \mathbf{T}(\phi,\theta)
   \end{bmatrix}.
-\]
+  \label{eq:fossen-kinematics-euler}
+\end{equation}
 Using a $ZYX$ (roll--pitch--yaw) convention,
 $\mathbf{R}(\phi,\theta,\psi)=\mathbf{R}_z(\psi)\mathbf{R}_y(\theta)\mathbf{R}_x(\phi)$
 maps body linear velocity to world velocity. Define $c_\alpha=\cos\alpha$ and
 $s_\alpha=\sin\alpha$. Then:
-\[
+\begin{equation}
   \mathbf{R}(\phi,\theta,\psi) =
   \begin{bmatrix}
     c_\psi c_\theta &
@@ -626,11 +632,12 @@ $s_\alpha=\sin\alpha$. Then:
       c_\theta s_\phi &
       c_\theta c_\phi
   \end{bmatrix}.
-\]
+  \label{eq:fossen-rotation-euler}
+\end{equation}
 The matrix
 $\mathbf{T}(\phi,\theta)$ maps body angular velocity
 $\boldsymbol{\omega}=[p,q,r]^\top$ to Euler angle rates:
-\[
+\begin{equation}
   \begin{bmatrix}
     \dot{\phi} \\ \dot{\theta} \\ \dot{\psi}
   \end{bmatrix}
@@ -645,7 +652,8 @@ $\boldsymbol{\omega}=[p,q,r]^\top$ to Euler angle rates:
     0 & \cos\phi & -\sin\phi \\
     0 & \sin\phi/\cos\theta & \cos\phi/\cos\theta
   \end{bmatrix}.
-\]
+  \label{eq:fossen-euler-rate-map}
+\end{equation}
 The mapping is singular at $\cos\theta=0$.
 
 \subsubsection{Attitude representation on $SO(3)$}
@@ -658,32 +666,37 @@ are typically the most robust choice.
 Let $\mathbf{q}_{WB}\in\mathbb{R}^4$ be a unit quaternion representing the
 rotation from $\{B\}$ to $\{W\}$, with components
 $\mathbf{q}_{WB}=[q_w,q_x,q_y,q_z]^\top$. Replace the Euler-angle kinematics by:
-\[
-  \dot{\mathbf{p}} =
-  \mathbf{R}(\mathbf{q}_{WB})\mathbf{v}, \qquad
-  \dot{\mathbf{q}}_{WB} = \frac{1}{2}\,\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}_{WB}, \qquad
-  \boldsymbol{\Omega}(\boldsymbol{\omega}) =
-  \begin{bmatrix}
-    0 & -p & -q & -r \\
-    p & 0 & r & -q \\
-    q & -r & 0 & p \\
-    r & q & -p & 0
-  \end{bmatrix}
-\]
+\begin{equation}
+  \begin{aligned}
+    \dot{\mathbf{p}} &=
+    \mathbf{R}(\mathbf{q}_{WB})\mathbf{v}, \\
+    \dot{\mathbf{q}}_{WB} &=
+    \frac{1}{2}\,\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}_{WB}, \\
+    \boldsymbol{\Omega}(\boldsymbol{\omega}) &=
+    \begin{bmatrix}
+      0 & -p & -q & -r \\
+      p & 0 & r & -q \\
+      q & -r & 0 & p \\
+      r & q & -p & 0
+    \end{bmatrix}.
+  \end{aligned}
+  \label{eq:fossen-kinematics-quat}
+\end{equation}
 where $\mathbf{p}=[x,y,z]^\top$ is the world position, $\mathbf{v}=[u,v,w]^\top$
 is the body linear velocity, and $\boldsymbol{\omega}=[p,q,r]^\top$ is the body
 angular velocity from $\boldsymbol{\nu}$. Numerical
 integration should renormalize $\mathbf{q}_{WB}$ to unit length.
 
 The corresponding rotation matrix $\mathbf{R}(\mathbf{q}_{WB})$ is:
-\[
+\begin{equation}
   \mathbf{R}(\mathbf{q}_{WB}) =
   \begin{bmatrix}
     1 - 2(q_y^2+q_z^2) & 2(q_x q_y - q_z q_w) & 2(q_x q_z + q_y q_w) \\
     2(q_x q_y + q_z q_w) & 1 - 2(q_x^2+q_z^2) & 2(q_y q_z - q_x q_w) \\
     2(q_x q_z - q_y q_w) & 2(q_y q_z + q_x q_w) & 1 - 2(q_x^2+q_y^2)
   \end{bmatrix}.
-\]
+  \label{eq:fossen-rotation-quat}
+\end{equation}
 
 The Euler-angle and quaternion kinematics are consistent when they use the same
 body-rate $\boldsymbol{\omega}$. The Euler form uses
@@ -1026,6 +1039,9 @@ document aligned with the code:
   \item When projection or sampling changes, regenerate figures with
     \texttt{latex/scripts/generate\_figures.py} and update the inline TikZ blocks
     in this file.
+  \item When the integrator comparison changes, regenerate
+    \texttt{figures/integrator\_drift.tikz} with
+    \texttt{latex/scripts/generate\_figures.py}.
   \item Refresh example figures if coordinate conventions or sign choices change.
 \end{itemize}
 
@@ -1034,7 +1050,11 @@ document aligned with the code:
 \label{app:integrators}
 
 \subsection{Time integration of ordinary differential equations}
-Consider the initial value problem
+\textbf{Purpose.} Define baseline time-stepping schemes used elsewhere.
+\textbf{Definitions.} Let $\mathbf{x}(t)\in\mathbb{R}^n$ be the system state and
+$f(\mathbf{x},t)$ a smooth vector field.
+\textbf{Assumptions.} State evolution is governed by a smooth ODE.
+\textbf{Derivation.} Consider the initial value problem
 \begin{equation}
   \dot{\mathbf{x}} = f(\mathbf{x}, t), \qquad \mathbf{x}(t_0)=\mathbf{x}_0.
   \label{eq:ode}
@@ -1053,17 +1073,25 @@ The classical fourth-order Runge--Kutta method (RK4) uses
   \mathbf{x}_{k+1} &= \mathbf{x}_k + \tfrac{\Delta t}{6}(\mathbf{k}_1 + 2\mathbf{k}_2 + 2\mathbf{k}_3 + \mathbf{k}_4).
   \label{eq:rk4}
 \end{align}
+\textbf{Implementation mapping.} These schemes are used as the generic RK4
+template in \texttt{Fossen6DOF.step()} and the rigid-body example in
+\texttt{latex/scripts/generate\_figures.py}.
 
 \subsection{Quaternion exponential-map update}
-Quaternion kinematics for body-rate $\boldsymbol{\omega}$ are
+\textbf{Purpose.} Provide a structure-preserving attitude update on $SO(3)$.
+\textbf{Definitions.} Let $\mathbf{q}=[q_w,q_x,q_y,q_z]^\top$ be a unit
+quaternion and $\boldsymbol{\omega}=[p,q,r]^\top$ the body angular rate.
+\textbf{Assumptions.} Constant body-rate $\boldsymbol{\omega}$ over $\Delta t$.
+\textbf{Derivation.} Quaternion kinematics for body-rate $\boldsymbol{\omega}$ are
 \begin{equation}
   \dot{\mathbf{q}} = \tfrac{1}{2}\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}.
   \label{eq:quat-kin}
 \end{equation}
 For constant $\boldsymbol{\omega}$ over $\Delta t$, define the rotation vector
 $\boldsymbol{\phi}=\boldsymbol{\omega}\Delta t$ with $\theta=\|\boldsymbol{\phi}\|$
-and $\mathbf{a}=\boldsymbol{\phi}/\theta$. The exponential map gives the delta
-quaternion
+and $\mathbf{a}=\boldsymbol{\phi}/\theta$. The skew operator $[\cdot]_\times$ is
+defined in \Cref{sec:definitions} and is used in $\exp([\boldsymbol{\phi}]_\times)$.
+The exponential map gives the delta quaternion
 \begin{equation}
   \Delta\mathbf{q}=
   \begin{bmatrix}
@@ -1082,10 +1110,38 @@ For small angles, use the approximation
   \Delta\mathbf{q}\approx [1,\tfrac{1}{2}\boldsymbol{\phi}]^\top.
   \label{eq:expmap-small}
 \end{equation}
+This follows from the Taylor series
+$\cos(\theta/2)\approx 1-\theta^2/8$ and $\sin(\theta/2)\approx \theta/2$, so
+\[
+  \Delta\mathbf{q}=
+  \begin{bmatrix}
+    \cos(\theta/2) \\
+    \sin(\theta/2)\,\mathbf{a}
+  \end{bmatrix}
+  \approx
+  \begin{bmatrix}
+    1 \\
+    \tfrac{1}{2}\theta\,\mathbf{a}
+  \end{bmatrix}
+  =
+  \begin{bmatrix}
+    1 \\
+    \tfrac{1}{2}\boldsymbol{\phi}
+  \end{bmatrix}.
+\]
+\textbf{Implementation mapping.} Implemented by
+\texttt{quaternion\_expmap\_wxyz()} and \texttt{integrate\_quaternion\_expmap()}
+in \texttt{src/na\_sim/na\_sim/fossen.py}.
 
 \subsection{RKMK overview}
-Runge--Kutta--Munthe-Kaas (RKMK) methods integrate on the Lie algebra and map
-back to the group with the exponential map. A first-order update uses
+\textbf{Purpose.} Define Lie-group Runge--Kutta integration on $SO(3)$.
+\textbf{Definitions.} Let $\hat{\boldsymbol{\omega}}=[\boldsymbol{\omega}]_\times$
+denote the body-rate matrix and $\boldsymbol{\xi}\in\mathbb{R}^3$ the local
+algebra coordinate in $\mathfrak{so}(3)$.
+\textbf{Assumptions.} Kinematics evolve on $SO(3)$ and are expressed in body
+rates with $\hat{\boldsymbol{\omega}}=[\boldsymbol{\omega}]_\times$.
+\textbf{Derivation.} Runge--Kutta--Munthe-Kaas (RKMK) methods integrate on the Lie
+algebra and map back to the group with the exponential map. A first-order update uses
 \begin{equation}
   \mathbf{R}_{k+1} = \mathbf{R}_k \exp([\boldsymbol{\xi}]_\times),
   \label{eq:rkmk-update}
@@ -1093,6 +1149,135 @@ back to the group with the exponential map. A first-order update uses
 where $\boldsymbol{\xi}\in\mathbb{R}^3$ is an algebra increment obtained from a
 Runge--Kutta scheme applied to the local coordinates. Higher-order variants
 combine multiple stages in $\mathfrak{so}(3)$ before exponentiating.
+\textbf{Implementation mapping.} Not implemented in the simulator; the plots in
+\texttt{latex/scripts/generate\_figures.py} include an RKMK4 reference curve.
+
+\paragraph{RKMK on $SO(3)$ (algorithmic form)}
+\textbf{Purpose.} Apply Runge--Kutta stages in the Lie algebra so the update
+stays on $SO(3)$ by construction.
+\textbf{Definitions.} Let $\mathbf{R}_k$ be the attitude at $t_k$ and define
+$\mathbf{R}(t)=\mathbf{R}_k\exp([\boldsymbol{\xi}(t)]_\times)$ within the step.
+\textbf{Assumptions.} Dynamics written as $\dot{\mathbf{R}}=\mathbf{R}\,\hat{\boldsymbol{\omega}}(\mathbf{R},t)$
+with $\hat{\boldsymbol{\omega}}=[\boldsymbol{\omega}]_\times$ in body coordinates.
+\textbf{Derivation.} Define the local coordinate $\boldsymbol{\xi}\in\mathbb{R}^3$
+such that $\mathbf{R}(t)=\mathbf{R}_k\exp([\boldsymbol{\xi}(t)]_\times)$ within
+the step. The algebra ODE is
+\begin{equation}
+  \dot{\boldsymbol{\xi}} = \mathrm{dexp}^{-1}_{\boldsymbol{\xi}}\,
+  \boldsymbol{\omega}\!\left(\mathbf{R}_k\exp([\boldsymbol{\xi}]_\times), t\right),
+  \label{eq:rkmk-ode}
+\end{equation}
+where $\mathrm{dexp}^{-1}$ is the inverse differential of the exponential map.
+For small $\boldsymbol{\xi}$ one may approximate
+\begin{equation}
+  \mathrm{dexp}^{-1}_{\boldsymbol{\xi}} \approx
+  \mathbf{I} + \tfrac{1}{2}[\boldsymbol{\xi}]_\times,
+  \label{eq:rkmk-dexp}
+\end{equation}
+and higher-order terms can be added when needed.
+\textbf{Algorithm.} Apply a standard RK scheme to \Cref{eq:rkmk-ode} to obtain
+stage values $\boldsymbol{\xi}_i$, then form the update
+\begin{equation}
+  \mathbf{R}_{k+1} = \mathbf{R}_k \exp\!\left([\boldsymbol{\xi}_{k+1}]_\times\right).
+  \label{eq:rkmk-final}
+\end{equation}
+\textbf{Implementation mapping.} Not implemented in the current simulator; the
+expmap update in \Cref{eq:expmap-dq,eq:expmap-update} is the first-order
+structure-preserving alternative used in practice.
+
+\paragraph{RKMK4 example (algebraic RK4 with expmap update)}
+\textbf{Purpose.} Provide a concrete 4th-order Lie-group update on $SO(3)$.
+\textbf{Definitions.} Define
+$f(\boldsymbol{\xi},t)=\mathrm{dexp}^{-1}_{\boldsymbol{\xi}}\,
+\boldsymbol{\omega}(\mathbf{R}_k\exp([\boldsymbol{\xi}]_\times), t)$. Then:
+\textbf{Assumptions.} Same as \Cref{eq:rkmk-ode}, with $\mathrm{dexp}^{-1}$ approximated
+by \Cref{eq:rkmk-dexp}.
+\textbf{Derivation.}
+\begin{align}
+  \mathbf{k}_1 &= f(\mathbf{0}, t_k), \nonumber \\
+  \mathbf{k}_2 &= f\!\left(\tfrac{\Delta t}{2}\mathbf{k}_1, t_k+\tfrac{\Delta t}{2}\right), \nonumber \\
+  \mathbf{k}_3 &= f\!\left(\tfrac{\Delta t}{2}\mathbf{k}_2, t_k+\tfrac{\Delta t}{2}\right), \nonumber \\
+  \mathbf{k}_4 &= f\!\left(\Delta t\,\mathbf{k}_3, t_k+\Delta t\right), \nonumber \\
+  \boldsymbol{\xi}_{k+1} &= \tfrac{\Delta t}{6}(\mathbf{k}_1+2\mathbf{k}_2+2\mathbf{k}_3+\mathbf{k}_4).
+  \label{eq:rkmk4}
+\end{align}
+The update is $\mathbf{R}_{k+1}=\mathbf{R}_k\exp([\boldsymbol{\xi}_{k+1}]_\times)$.
+\textbf{Implementation mapping.} Not implemented; would replace the attitude
+update in \texttt{Fossen6DOF.step()} if higher-order Lie integration is needed.
+
+\subsection{Structure preservation: RK4 drift vs expmap}
+\textbf{Purpose.} Demonstrate why direct RK4 on $\mathbf{R}$ leaves $SO(3)$.
+\textbf{Definitions.} Define the orthonormality defect
+$\|\mathbf{R}^\top\mathbf{R}-\mathbf{I}\|_F$.
+\textbf{Assumptions.} Attitude kinematics
+$\dot{\mathbf{R}}=\mathbf{R}[\boldsymbol{\omega}]_\times$ with constant
+$\boldsymbol{\omega}$.
+\textbf{Derivation.} Applying RK4 to $\dot{\mathbf{R}}$ does not enforce orthonormality,
+so $\mathbf{R}^\top\mathbf{R}$ drifts from the identity. The expmap (or an RKMK
+update) preserves the group structure by construction. The example in
+\Cref{fig:integrator_drift} compares the orthonormality error
+$\|\mathbf{R}^\top\mathbf{R}-\mathbf{I}\|_F$ over time.
+\textbf{Implementation mapping.} Data for the plots are generated by
+\texttt{integrator\_drift\_example()} in \texttt{latex/scripts/generate\_figures.py}.
+\begin{figure}[h]
+  \centering
+  \input{figures/integrator_drift.tikz}
+  \caption{Orthonormality drift for RK4 on $\mathbf{R}$, expmap (RKMK-1), and
+  RKMK4 at constant angular velocity.}
+  \label{fig:integrator_drift}
+\end{figure}
+The same constant-rate setup can be compared to the exact solution
+$\mathbf{R}_{\text{exact}}=\mathbf{R}_0\exp([\boldsymbol{\omega}\Delta t]_\times)$.
+\Cref{fig:integrator_error} reports the error
+$\|\mathbf{R}_{\text{est}}-\mathbf{R}_{\text{exact}}\|_F$ over time.
+\begin{figure}[h]
+  \centering
+  \input{figures/integrator_error.tikz}
+  \caption{Constant angular velocity: RK4, expmap (RKMK-1), and RKMK4 error
+  relative to the exact solution.}
+  \label{fig:integrator_error}
+\end{figure}
+
+\subsection{Example report: torque-free rigid-body tumble}
+\textbf{Purpose.} Provide a verifiable nonlinear example with a reference
+solution for error assessment.
+\textbf{Definitions.} Inertia $\mathbf{I}$ is constant and diagonal; angular
+velocity is body-frame.
+\textbf{Assumptions.} Rigid body with constant inertia, no external torques,
+body-frame angular velocity, and exact kinematics
+$\dot{\mathbf{R}}=\mathbf{R}[\boldsymbol{\omega}]_\times$.
+\textbf{Derivation.} Euler's rigid-body equations:
+\begin{equation}
+  \mathbf{I}\dot{\boldsymbol{\omega}} + \boldsymbol{\omega} \times (\mathbf{I}\boldsymbol{\omega}) = \mathbf{0}.
+  \label{eq:tumble-omega}
+\end{equation}
+\textbf{Experiment.} Use $\mathbf{I}=\mathrm{diag}(3,2,1)$, initial
+$\boldsymbol{\omega}(0)=[1.4,\,0.3,\,0.9]^\top$, and $\Delta t=0.01$~s for 60~s.
+Integrate $\boldsymbol{\omega}$ with RK4. Update $\mathbf{R}$ either with RK4 on
+$\dot{\mathbf{R}}$ (drift-prone) or with the expmap update
+\Cref{eq:expmap-dq,eq:expmap-update} using the midpoint angular rate.
+\textbf{Reference.} For error comparison, use a high-resolution expmap update
+with $\Delta t_{\text{ref}}=0.001$~s (ten substeps per coarse step).
+\textbf{Result.} \Cref{fig:integrator_tumbling} shows the orthonormality error
+over time. RK4 on $\mathbf{R}$ drifts off $SO(3)$, while the expmap update
+preserves orthonormality to numerical precision. \Cref{fig:integrator_tumbling_error}
+shows the error relative to the reference solution.
+\textbf{Implementation mapping.} The experiment and plots are generated by
+\texttt{rigid\_body\_tumbling\_example()} in \texttt{latex/scripts/generate\_figures.py}.
+\begin{figure}[h]
+  \centering
+  \input{figures/integrator_tumbling.tikz}
+  \caption{Torque-free tumble: orthonormality drift for RK4 on $\mathbf{R}$,
+  expmap (RKMK-1), and RKMK4.}
+  \label{fig:integrator_tumbling}
+\end{figure}
+\begin{figure}[h]
+  \centering
+  \input{figures/integrator_tumbling_error.tikz}
+  \caption{Torque-free tumble: RK4, expmap (RKMK-1), and RKMK4 error relative to
+  a high-resolution expmap reference solution.}
+  \label{fig:integrator_tumbling_error}
+\end{figure}
 
 \section{Applying integrators to the Fossen 6~DOF model}
 \label{app:fossen-map}

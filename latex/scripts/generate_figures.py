@@ -10,6 +10,7 @@ if UTILS_PATH not in sys.path:
     sys.path.insert(0, UTILS_PATH)
 
 from na_utils.bspline import BSplinePath  # noqa: E402
+import numpy as np  # noqa: E402
 
 FIG_DIR = os.path.join(os.path.dirname(__file__), "..", "figures")
 
@@ -50,6 +51,291 @@ def write_tikz(filename: str, lines) -> None:
             handle.write(line)
             if not line.endswith("\n"):
                 handle.write("\n")
+
+
+def skew(vector_xyz: np.ndarray) -> np.ndarray:
+    x, y, z = vector_xyz
+    return np.array(
+        [
+            [0.0, -z, y],
+            [z, 0.0, -x],
+            [-y, x, 0.0],
+        ],
+        dtype=float,
+    )
+
+
+def so3_exp(omega_xyz: np.ndarray, dt: float) -> np.ndarray:
+    theta = float(np.linalg.norm(omega_xyz)) * float(dt)
+    if theta < 1e-12:
+        return np.eye(3, dtype=float) + skew(omega_xyz * dt)
+    axis = omega_xyz / float(np.linalg.norm(omega_xyz))
+    kx = skew(axis)
+    return np.eye(3, dtype=float) + math.sin(theta) * kx + (1.0 - math.cos(theta)) * (kx @ kx)
+
+
+def so3_exp_vec(phi_xyz: np.ndarray) -> np.ndarray:
+    return so3_exp(phi_xyz, 1.0)
+
+
+def dexp_inv(phi_xyz: np.ndarray) -> np.ndarray:
+    return np.eye(3, dtype=float) + 0.5 * skew(phi_xyz)
+
+
+def rkmk4_step(r: np.ndarray, omega_fn, t: float, dt: float) -> np.ndarray:
+    def f(phi, t_eval):
+        return dexp_inv(phi) @ omega_fn(t_eval)
+
+    k1 = f(np.zeros(3, dtype=float), t)
+    k2 = f(0.5 * dt * k1, t + 0.5 * dt)
+    k3 = f(0.5 * dt * k2, t + 0.5 * dt)
+    k4 = f(dt * k3, t + dt)
+    phi_next = (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+    return r @ so3_exp_vec(phi_next)
+
+
+def rk4_rotation_step(r: np.ndarray, omega_xyz: np.ndarray, dt: float) -> np.ndarray:
+    s = skew(omega_xyz)
+    k1 = r @ s
+    k2 = (r + 0.5 * dt * k1) @ s
+    k3 = (r + 0.5 * dt * k2) @ s
+    k4 = (r + dt * k3) @ s
+    return r + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+
+def integrator_drift_example() -> None:
+    dt = 0.1
+    steps = 800
+    omega = np.array([1.2, -0.7, 0.9], dtype=float)
+
+    r_rk4 = np.eye(3, dtype=float)
+    r_exp = np.eye(3, dtype=float)
+    r_rkmk4 = np.eye(3, dtype=float)
+
+    rk4_points = []
+    exp_points = []
+    rkmk4_points = []
+    rk4_err_points = []
+    exp_err_points = []
+    rkmk4_err_points = []
+    for k in range(steps + 1):
+        t = k * dt
+        err_rk4 = float(np.linalg.norm(r_rk4.T @ r_rk4 - np.eye(3)))
+        err_exp = float(np.linalg.norm(r_exp.T @ r_exp - np.eye(3)))
+        err_rkmk4 = float(np.linalg.norm(r_rkmk4.T @ r_rkmk4 - np.eye(3)))
+        err_rk4 = max(err_rk4, 1e-12)
+        err_exp = max(err_exp, 1e-12)
+        err_rkmk4 = max(err_rkmk4, 1e-12)
+        err_rk4_exact = float(np.linalg.norm(r_rk4 - r_exp))
+        err_exp_exact = float(np.linalg.norm(r_exp - r_exp))
+        err_rkmk4_exact = float(np.linalg.norm(r_rkmk4 - r_exp))
+        err_rk4_exact = max(err_rk4_exact, 1e-12)
+        err_exp_exact = max(err_exp_exact, 1e-12)
+        err_rkmk4_exact = max(err_rkmk4_exact, 1e-12)
+        rk4_points.append((t, err_rk4))
+        exp_points.append((t, err_exp))
+        rkmk4_points.append((t, err_rkmk4))
+        rk4_err_points.append((t, err_rk4_exact))
+        exp_err_points.append((t, err_exp_exact))
+        rkmk4_err_points.append((t, err_rkmk4_exact))
+
+        r_rk4 = rk4_rotation_step(r_rk4, omega, dt)
+        r_exp = r_exp @ so3_exp(omega, dt)
+        r_rkmk4 = rkmk4_step(r_rkmk4, lambda _: omega, t, dt)
+
+    rk4_points = downsample(rk4_points, max_points=160)
+    exp_points = downsample(exp_points, max_points=160)
+    rkmk4_points = downsample(rkmk4_points, max_points=160)
+    rk4_err_points = downsample(rk4_err_points, max_points=160)
+    exp_err_points = downsample(exp_err_points, max_points=160)
+    rkmk4_err_points = downsample(rkmk4_err_points, max_points=160)
+
+    rk4_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in rk4_points)
+    exp_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in exp_points)
+    rkmk4_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in rkmk4_points)
+    rk4_err_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in rk4_err_points)
+    exp_err_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in exp_err_points)
+    rkmk4_err_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in rkmk4_err_points)
+
+    lines = [
+        "\\begin{tikzpicture}",
+        "  \\begin{axis}[",
+        "    width=0.9\\linewidth,",
+        "    height=0.45\\linewidth,",
+        "    xlabel={time (s)},",
+        "    ylabel={$\\|R^\\top R - I\\|_F$},",
+        "    ymode=log,",
+        "    grid=both,",
+        "    grid style={gray!20},",
+        "    legend style={at={(0.02,0.98)},anchor=north west,font=\\scriptsize},",
+        "  ]",
+        f"    \\addplot[thick,red!70!black] coordinates {{ {rk4_coords} }};",
+        "    \\addlegendentry{RK4 on $R$}",
+        f"    \\addplot[thick,blue!70!black] coordinates {{ {exp_coords} }};",
+        "    \\addlegendentry{expmap (RKMK-1)}",
+        f"    \\addplot[thick,green!60!black] coordinates {{ {rkmk4_coords} }};",
+        "    \\addlegendentry{RKMK4}",
+        "  \\end{axis}",
+        "\\end{tikzpicture}",
+    ]
+    write_tikz("integrator_drift.tikz", lines)
+
+    err_lines = [
+        "\\begin{tikzpicture}",
+        "  \\begin{axis}[",
+        "    width=0.9\\linewidth,",
+        "    height=0.45\\linewidth,",
+        "    xlabel={time (s)},",
+        "    ylabel={$\\|R_{\\text{est}}-R_{\\text{exact}}\\|_F$},",
+        "    ymode=log,",
+        "    grid=both,",
+        "    grid style={gray!20},",
+        "    legend style={at={(0.02,0.98)},anchor=north west,font=\\scriptsize},",
+        "  ]",
+        f"    \\addplot[thick,red!70!black] coordinates {{ {rk4_err_coords} }};",
+        "    \\addlegendentry{RK4 on $R$}",
+        f"    \\addplot[thick,blue!70!black] coordinates {{ {exp_err_coords} }};",
+        "    \\addlegendentry{expmap (RKMK-1)}",
+        f"    \\addplot[thick,green!60!black] coordinates {{ {rkmk4_err_coords} }};",
+        "    \\addlegendentry{RKMK4}",
+        "  \\end{axis}",
+        "\\end{tikzpicture}",
+    ]
+    write_tikz("integrator_error.tikz", err_lines)
+
+
+def rigid_body_tumbling_example() -> None:
+    dt = 0.01
+    steps = 6000
+    ref_dt = 0.001
+    inertia = np.diag([3.0, 2.0, 1.0])
+    inertia_inv = np.linalg.inv(inertia)
+
+    omega = np.array([1.4, 0.3, 0.9], dtype=float)
+    omega_ref = omega.copy()
+    r_rk4 = np.eye(3, dtype=float)
+    r_exp = np.eye(3, dtype=float)
+    r_rkmk4 = np.eye(3, dtype=float)
+    r_ref = np.eye(3, dtype=float)
+
+    def omega_dot(omega_vec: np.ndarray) -> np.ndarray:
+        h = inertia @ omega_vec
+        return -inertia_inv @ np.cross(omega_vec, h)
+
+    def rk4_omega_step(omega_vec: np.ndarray, dt_step: float) -> np.ndarray:
+        k1 = omega_dot(omega_vec)
+        k2 = omega_dot(omega_vec + 0.5 * dt_step * k1)
+        k3 = omega_dot(omega_vec + 0.5 * dt_step * k2)
+        k4 = omega_dot(omega_vec + dt_step * k3)
+        return omega_vec + (dt_step / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+    rk4_points = []
+    exp_points = []
+    rkmk4_points = []
+    rk4_err_points = []
+    exp_err_points = []
+    rkmk4_err_points = []
+    for k in range(steps + 1):
+        t = k * dt
+        err_rk4 = float(np.linalg.norm(r_rk4.T @ r_rk4 - np.eye(3)))
+        err_exp = float(np.linalg.norm(r_exp.T @ r_exp - np.eye(3)))
+        err_rkmk4 = float(np.linalg.norm(r_rkmk4.T @ r_rkmk4 - np.eye(3)))
+        err_rk4 = max(err_rk4, 1e-12)
+        err_exp = max(err_exp, 1e-12)
+        err_rkmk4 = max(err_rkmk4, 1e-12)
+        err_rk4_ref = float(np.linalg.norm(r_rk4 - r_ref))
+        err_exp_ref = float(np.linalg.norm(r_exp - r_ref))
+        err_rkmk4_ref = float(np.linalg.norm(r_rkmk4 - r_ref))
+        err_rk4_ref = max(err_rk4_ref, 1e-12)
+        err_exp_ref = max(err_exp_ref, 1e-12)
+        err_rkmk4_ref = max(err_rkmk4_ref, 1e-12)
+        rk4_points.append((t, err_rk4))
+        exp_points.append((t, err_exp))
+        rkmk4_points.append((t, err_rkmk4))
+        rk4_err_points.append((t, err_rk4_ref))
+        exp_err_points.append((t, err_exp_ref))
+        rkmk4_err_points.append((t, err_rkmk4_ref))
+
+        omega_next = rk4_omega_step(omega, dt)
+        omega_mid = 0.5 * (omega + omega_next)
+        r_rk4 = rk4_rotation_step(r_rk4, omega_mid, dt)
+        r_exp = r_exp @ so3_exp(omega_mid, dt)
+        omega_start = omega.copy()
+        omega_delta = omega_next - omega_start
+        r_rkmk4 = rkmk4_step(
+            r_rkmk4,
+            lambda t_eval: omega_start + (t_eval - t) * omega_delta / dt,
+            t,
+            dt,
+        )
+        omega = omega_next
+
+        ref_steps = int(round(dt / ref_dt))
+        for _ in range(ref_steps):
+            omega_ref_next = rk4_omega_step(omega_ref, ref_dt)
+            omega_ref_mid = 0.5 * (omega_ref + omega_ref_next)
+            r_ref = r_ref @ so3_exp(omega_ref_mid, ref_dt)
+            omega_ref = omega_ref_next
+
+    rk4_points = downsample(rk4_points, max_points=180)
+    exp_points = downsample(exp_points, max_points=180)
+    rkmk4_points = downsample(rkmk4_points, max_points=180)
+    rk4_err_points = downsample(rk4_err_points, max_points=180)
+    exp_err_points = downsample(exp_err_points, max_points=180)
+    rkmk4_err_points = downsample(rkmk4_err_points, max_points=180)
+
+    rk4_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in rk4_points)
+    exp_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in exp_points)
+    rkmk4_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in rkmk4_points)
+    rk4_err_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in rk4_err_points)
+    exp_err_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in exp_err_points)
+    rkmk4_err_coords = " ".join(f"({t:.3f},{e:.6e})" for t, e in rkmk4_err_points)
+
+    lines = [
+        "\\begin{tikzpicture}",
+        "  \\begin{axis}[",
+        "    width=0.9\\linewidth,",
+        "    height=0.45\\linewidth,",
+        "    xlabel={time (s)},",
+        "    ylabel={$\\|R^\\top R - I\\|_F$},",
+        "    ymode=log,",
+        "    grid=both,",
+        "    grid style={gray!20},",
+        "    legend style={at={(0.02,0.98)},anchor=north west,font=\\scriptsize},",
+        "  ]",
+        f"    \\addplot[thick,red!70!black] coordinates {{ {rk4_coords} }};",
+        "    \\addlegendentry{RK4 on $R$}",
+        f"    \\addplot[thick,blue!70!black] coordinates {{ {exp_coords} }};",
+        "    \\addlegendentry{expmap (RKMK-1)}",
+        f"    \\addplot[thick,green!60!black] coordinates {{ {rkmk4_coords} }};",
+        "    \\addlegendentry{RKMK4}",
+        "  \\end{axis}",
+        "\\end{tikzpicture}",
+    ]
+    write_tikz("integrator_tumbling.tikz", lines)
+
+    err_lines = [
+        "\\begin{tikzpicture}",
+        "  \\begin{axis}[",
+        "    width=0.9\\linewidth,",
+        "    height=0.45\\linewidth,",
+        "    xlabel={time (s)},",
+        "    ylabel={$\\|R_{\\text{est}}-R_{\\text{ref}}\\|_F$},",
+        "    ymode=log,",
+        "    grid=both,",
+        "    grid style={gray!20},",
+        "    legend style={at={(0.02,0.98)},anchor=north west,font=\\scriptsize},",
+        "  ]",
+        f"    \\addplot[thick,red!70!black] coordinates {{ {rk4_err_coords} }};",
+        "    \\addlegendentry{RK4 on $R$}",
+        f"    \\addplot[thick,blue!70!black] coordinates {{ {exp_err_coords} }};",
+        "    \\addlegendentry{expmap (RKMK-1)}",
+        f"    \\addplot[thick,green!60!black] coordinates {{ {rkmk4_err_coords} }};",
+        "    \\addlegendentry{RKMK4}",
+        "  \\end{axis}",
+        "\\end{tikzpicture}",
+    ]
+    write_tikz("integrator_tumbling_error.tikz", err_lines)
 
 
 def los_example() -> None:
@@ -261,6 +547,8 @@ def main() -> None:
     los_example()
     open_end_example()
     sampling_density_example()
+    integrator_drift_example()
+    rigid_body_tumbling_example()
 
 
 if __name__ == "__main__":

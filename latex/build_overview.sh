@@ -8,7 +8,7 @@ ROOT_DIR="$(cd "${LATEX_DIR}/.." && pwd)"
 
 MAIN="${MAIN:-main}"
 OUTDIR="${OUTDIR:-build}"
-GENERATE_FIGURES="${GENERATE_FIGURES:-0}"
+GENERATE_FIGURES="${GENERATE_FIGURES:-1}"
 
 if [[ "${OUTDIR}" != /* ]]; then
   OUTDIR="${LATEX_DIR}/${OUTDIR}"

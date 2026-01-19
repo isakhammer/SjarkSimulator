@@ -7,6 +7,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       make \
       python3 \
+      python3-numpy \
       latexmk \
       texlive-latex-base \
       texlive-latex-recommended \
@@ -16,4 +17,4 @@ RUN apt-get update \
       texlive-science \
     && rm -rf /var/lib/apt/lists/*
 
-CMD ["make", "-C", "latex", "pdf"]
+CMD ["make", "-C", "latex", "pdf-with-figures"]
