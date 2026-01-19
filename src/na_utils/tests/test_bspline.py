@@ -118,6 +118,33 @@ def test_bspline_projection_accuracy_cm():
     assert max_cte <= 0.01
 
 
+def test_bspline_cte_sign_matches_left_normal():
+    radius = 6.0
+    angles = [0.0, 0.5 * math.pi, math.pi, 1.5 * math.pi, 2.0 * math.pi]
+    control = [(radius * math.cos(a), radius * math.sin(a)) for a in angles]
+    path = BSplinePath(control, start_u=0.0, samples=400, closed=True)
+
+    sample = path.sample_at_t(path.t[len(path.t) // 4])
+    nx, ny = sample.normal
+    offset = 1.0
+
+    proj_left = path.project(
+        sample.point[0] + nx * offset,
+        sample.point[1] + ny * offset,
+    )
+    assert proj_left is not None
+    assert proj_left.cte > 0.0
+    assert math.isclose(proj_left.cte, offset, abs_tol=0.05)
+
+    proj_right = path.project(
+        sample.point[0] - nx * offset,
+        sample.point[1] - ny * offset,
+    )
+    assert proj_right is not None
+    assert proj_right.cte < 0.0
+    assert math.isclose(proj_right.cte, -offset, abs_tol=0.05)
+
+
 def test_bspline_projection_hint_matches_full_search():
     control = [
         (0.0, 0.0),

@@ -8,7 +8,8 @@ import launch_testing
 import launch_ros.actions
 import pytest
 import rclpy
-from na_msg.msg import BoatState, BsplinePath
+from na_msg.msg import BoatState, BsplinePath, ControllerState
+from na_utils.bspline import BSplinePath
 
 
 def _wait_for_message(node, topic, msg_type, timeout_sec, predicate=None):
@@ -52,11 +53,13 @@ def _straight_path():
     return msg
 
 
-def _circular_path(radius=6.0):
-    angles = [0.0, 0.5 * math.pi, math.pi, 1.5 * math.pi, 2.0 * math.pi]
+def _circular_path(radius=6.0, center_x=0.0, center_y=None):
+    if center_y is None:
+        center_y = radius
+    angles = [-0.5 * math.pi, 0.0, 0.5 * math.pi, math.pi, 1.5 * math.pi]
     msg = BsplinePath()
-    msg.ctrl_x = [radius * math.cos(a) for a in angles]
-    msg.ctrl_y = [radius * math.sin(a) for a in angles]
+    msg.ctrl_x = [center_x + radius * math.cos(a) for a in angles]
+    msg.ctrl_y = [center_y + radius * math.sin(a) for a in angles]
     msg.ctrl_z = [0.0 for _ in angles]
     msg.degree = 3
     msg.closed = True
@@ -66,6 +69,55 @@ def _circular_path(radius=6.0):
 
 def _has_forward_speed(msg):
     return msg.u > 0.01
+
+
+def _path_yaw_sign(path, proj_x, proj_y):
+    proj = path.project(proj_x, proj_y)
+    if proj is None or path.length <= 0.0:
+        return 0
+    step = max(0.05, 0.01 * path.length)
+    t0 = proj.t
+    t1 = path.advance_t(t0, step)
+    s0 = path.sample_at_t(t0)
+    s1 = path.sample_at_t(t1)
+    yaw0 = -math.atan2(s0.tangent[1], s0.tangent[0])
+    yaw1 = -math.atan2(s1.tangent[1], s1.tangent[0])
+    dyaw = (yaw1 - yaw0 + math.pi) % (2.0 * math.pi) - math.pi
+    if abs(dyaw) < 1e-6:
+        return 0
+    return 1 if dyaw > 0.0 else -1
+
+
+def _wait_for_tracking_turn(node, timeout_sec=8.0, cte_tol=0.5, r_min=0.02):
+    last_state = {"boat": None, "ctrl": None}
+
+    def boat_cb(msg):
+        last_state["boat"] = msg
+
+    def ctrl_cb(msg):
+        last_state["ctrl"] = msg
+
+    sub_boat = node.create_subscription(BoatState, "/boat_state", boat_cb, 10)
+    sub_ctrl = node.create_subscription(
+        ControllerState, "/controller_ns/controller_state", ctrl_cb, 10
+    )
+    end_time = time.monotonic() + timeout_sec
+    try:
+        while time.monotonic() < end_time and rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.1)
+            boat = last_state["boat"]
+            ctrl = last_state["ctrl"]
+            if boat is None or ctrl is None:
+                continue
+            if abs(ctrl.cte) > cte_tol:
+                continue
+            if abs(boat.r) <= r_min:
+                continue
+            return boat, ctrl
+    finally:
+        node.destroy_subscription(sub_boat)
+        node.destroy_subscription(sub_ctrl)
+    return None, None
 
 
 @pytest.mark.launch_test
@@ -136,12 +188,26 @@ class TestPathFollowing3DofLaunch(unittest.TestCase):
             "Yaw rate too large on straight path",
         )
 
-        _publish_path_for(self.node, _circular_path(), duration_sec=1.0)
-        turn_state = _wait_for_message(
-            self.node,
-            "/boat_state",
-            BoatState,
-            timeout_sec=8.0,
-            predicate=lambda msg: abs(msg.r) > 0.02,
+        circle_msg = _circular_path()
+        _publish_path_for(self.node, circle_msg, duration_sec=1.0)
+        boat_state, ctrl_state = _wait_for_tracking_turn(self.node)
+        self.assertIsNotNone(boat_state, "No tracking turn state on circular path")
+        self.assertIsNotNone(ctrl_state, "No controller state during circular path")
+        path = BSplinePath(
+            list(zip(circle_msg.ctrl_x, circle_msg.ctrl_y)),
+            start_u=circle_msg.start_u,
+            samples=400,
+            closed=circle_msg.closed,
         )
-        self.assertIsNotNone(turn_state, "No turning response on circular path")
+        expected_sign = _path_yaw_sign(path, ctrl_state.proj_x, ctrl_state.proj_y)
+        self.assertNotEqual(
+            expected_sign,
+            0,
+            "Could not infer path yaw sign on circular path",
+        )
+        actual_sign = 1 if boat_state.r > 0.0 else -1
+        self.assertEqual(
+            actual_sign,
+            expected_sign,
+            "Yaw rate sign is inconsistent with circular path direction",
+        )
