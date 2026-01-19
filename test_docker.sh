@@ -14,7 +14,7 @@ run_docker_tests() {
     -v "$(pwd)/:/root/code" \
     -w /root/code \
     "$image_name" \
-    bash -lc 'source /root/code/common_scripts.sh && ct'
+    bash -lc 'source /root/code/common_scripts.sh && if [[ $# -eq 0 ]]; then ct; else colcon test "$@" && colcon test-result --verbose; fi' -- "$@"
 }
 
 run_overview_build() {
@@ -26,4 +26,4 @@ run_overview_build() {
 }
 
 run_overview_build
-run_docker_tests
+run_docker_tests "$@"
