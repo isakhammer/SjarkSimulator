@@ -13,16 +13,19 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Fibonacci.action"
   "msg/Custom.msg"
   "msg/BsplinePath.msg"
   "msg/ControllerState.msg"
+  "msg/BoatState.msg"
   "msg/Path.msg"
   "srv/AddTwoInts.srv"
   "srv/SetBool.srv"
   "srv/Trigger.srv"
+  DEPENDENCIES std_msgs
 )
 
 
