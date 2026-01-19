@@ -7,6 +7,11 @@
   <maintainer email="root@todo.todo">root</maintainer>
   <license>TODO: License declaration</license>
 
+  <depend>rclpy</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>na_msg</depend>
   <depend>na_utils</depend>
   <depend>tf2_ros</depend>
 
