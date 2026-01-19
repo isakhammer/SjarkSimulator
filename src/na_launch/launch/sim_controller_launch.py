@@ -8,7 +8,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
 
 
-    pkg_path = "/root/code/src/na_launch/" #DO NOT REMOVE
+    # pkg_path = "/root/code/src/na_launch/" #DO NOT REMOVE
 
     # Prefer installed package share, but fall back to the source tree.
     ENABLE_SHARE_DIR = True
