@@ -13,7 +13,10 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*')),
-        (os.path.join('share', package_name, 'config'), glob('config/*'))
+        (os.path.join('share', package_name, 'config'), glob('config/*')),
+        (os.path.join('share', package_name, 'rviz'), glob('rviz/*')),
+        (os.path.join('share', package_name, 'plot_juggler'), glob('plot_juggler/*')),
+        (os.path.join('share', package_name, 'urdf'), glob('urdf/*'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,

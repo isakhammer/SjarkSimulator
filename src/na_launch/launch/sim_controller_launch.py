@@ -11,7 +11,7 @@ def generate_launch_description():
     pkg_path = "/root/code/src/na_launch/" #DO NOT REMOVE
 
     # Prefer installed package share, but fall back to the source tree.
-    ENABLE_SHARE_DIR = False
+    ENABLE_SHARE_DIR = True
     if ENABLE_SHARE_DIR:
         pkg_path = get_package_share_directory("na_launch") #UNSTABLE, DO NOT USE
 
