@@ -333,6 +333,10 @@ cross-track error
 \]
 With this convention, $cte > 0$ means the boat is to the left of the path
 tangent direction.
+These geometric utilities in \texttt{na\_utils} are defined in the abstract
+math frame where headings are measured counterclockwise from $+x$; the controller
+and simulator convert to the NED/FRD robotic convention (clockwise yaw) when
+computing $\psi_{path}$.
 
 \subsection{\texttt{ProjectionTracker}}
 \texttt{ProjectionTracker} adds state to stabilize sequential projections:
@@ -968,6 +972,21 @@ The following checks catch most sign and frame mistakes before tuning:
 The repository includes these checks as unit tests in
 \texttt{src/na\_sim/test} to support future 6~DOF upgrades.
 
+\subsubsection{Controller and spline regression tests}
+The path utilities and controller have explicit regression tests that encode the
+sign conventions used by the closed loop:
+\begin{itemize}
+  \item \texttt{src/na\_utils/tests/test\_bspline.py} validates the B-spline Frenet
+    frame, including the left-normal $cte$ sign on a closed circle.
+  \item \texttt{src/na\_launch/test/test\_path\_following\_3dof\_launch.py} and
+    \texttt{src/na\_launch/test/test\_path\_following\_6dof\_launch.py} launch the
+    controller and simulator and assert that the yaw-rate sign matches the local
+    path direction derived from the spline tangent.
+\end{itemize}
+These tests are written against the Fossen NED/FRD convention (world $z$ down,
+body $+y$ starboard, yaw positive clockwise). When changing sign conventions or
+mapping between frames, update these tests together with the controller law.
+
 \subsection{Simulation node (\texttt{sim\_node.py})}
 The simulator node integrates the continuous-time ODE using RK4 with timestep
 \texttt{dt}. Inputs are saturated to
@@ -1042,8 +1061,9 @@ dependencies.
     namespacing requires explicit remapping for multi-vehicle setups.
   \item The simulator is planar with simplified damping and no environmental effects;
     it is not a high-fidelity hydrodynamic model.
-  \item Automated tests exist for the B-spline utilities and basic simulator
-    sign/consistency checks, but the controller still lacks direct unit tests.
+  \item Automated tests exist for the B-spline utilities, simulator sign checks,
+    and controller path-following direction, but they are regression tests rather
+    than exhaustive control validation.
 \end{itemize}
 
 \section{How this stays in sync with code}
