@@ -8,7 +8,7 @@ import launch_testing
 import launch_ros.actions
 import pytest
 import rclpy
-from na_msg.msg import BoatState, BsplinePath, ControllerState
+from na_msg.msg import BoatState, BsplinePath, ControllerState, RotorCommand
 from na_utils.bspline import BSplinePath
 
 
@@ -88,8 +88,14 @@ def _path_yaw_sign(path, proj_x, proj_y):
     return 1 if dyaw > 0.0 else -1
 
 
-def _wait_for_tracking_turn(node, timeout_sec=8.0, cte_tol=0.5, r_min=0.02):
-    last_state = {"boat": None, "ctrl": None}
+def _wait_for_tracking_turn(
+    node,
+    timeout_sec=8.0,
+    cte_tol=0.5,
+    r_min=0.02,
+    delta_min=0.02,
+):
+    last_state = {"boat": None, "ctrl": None, "cmd": None}
 
     def boat_cb(msg):
         last_state["boat"] = msg
@@ -97,26 +103,34 @@ def _wait_for_tracking_turn(node, timeout_sec=8.0, cte_tol=0.5, r_min=0.02):
     def ctrl_cb(msg):
         last_state["ctrl"] = msg
 
+    def cmd_cb(msg):
+        last_state["cmd"] = msg
+
     sub_boat = node.create_subscription(BoatState, "/boat_state", boat_cb, 10)
     sub_ctrl = node.create_subscription(
         ControllerState, "/controller_ns/controller_state", ctrl_cb, 10
     )
+    sub_cmd = node.create_subscription(RotorCommand, "/cmd_rotor", cmd_cb, 10)
     end_time = time.monotonic() + timeout_sec
     try:
         while time.monotonic() < end_time and rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.1)
             boat = last_state["boat"]
             ctrl = last_state["ctrl"]
-            if boat is None or ctrl is None:
+            cmd = last_state["cmd"]
+            if boat is None or ctrl is None or cmd is None:
                 continue
             if abs(ctrl.cte) > cte_tol:
                 continue
             if abs(boat.r) <= r_min:
                 continue
+            if abs(boat.delta) <= delta_min:
+                continue
             return boat, ctrl
     finally:
         node.destroy_subscription(sub_boat)
         node.destroy_subscription(sub_ctrl)
+        node.destroy_subscription(sub_cmd)
     return None, None
 
 
@@ -210,4 +224,9 @@ class TestPathFollowing3DofLaunch(unittest.TestCase):
             actual_sign,
             expected_sign,
             "Yaw rate sign is inconsistent with circular path direction",
+        )
+        self.assertGreater(
+            boat_state.r * boat_state.delta,
+            0.0,
+            "Yaw rate sign should match steering angle under ENU/FLU convention",
         )
