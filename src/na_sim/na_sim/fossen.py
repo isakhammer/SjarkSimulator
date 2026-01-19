@@ -183,7 +183,8 @@ def quaternion_multiply_wxyz(lhs_wxyz: Iterable[float], rhs_wxyz: Iterable[float
 
 
 def quaternion_expmap_wxyz(omega_pqr: Iterable[float], dt: float) -> np.ndarray:
-    """Return a delta quaternion for constant body rate omega over dt.
+    """
+    Return a delta quaternion for constant body rate omega over dt.
 
     This is the SO(3) exponential map: it gives the exact rotation for a
     constant angular velocity over the step, keeping the update on-manifold.
