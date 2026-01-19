@@ -59,10 +59,25 @@
       <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
        <range top="1.000000" right="1.000000" bottom="-1.000000" left="0.000000"/>
        <limitY/>
-       <curve name="/cmd_thrust/data[0]" color="#1ac938"/>
-       <curve name="/cmd_thrust/data[1]" color="#ff7f0e"/>
+       <curve name="/cmd_rotor/thrust" color="#1ac938"/>
        <curve name="/boat_state/thrust" color="#2ca02c"/>
+       <curve name="/boat_state/u" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="yaw" containers="1">
+   <Container>
+    <DockSplitter orientation="-" count="1" sizes="1">
+     <DockArea name="...">
+      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
+       <range top="1.000000" right="1.000000" bottom="-1.000000" left="0.000000"/>
+       <limitY/>
+       <curve name="/cmd_rotor/delta" color="#ff7f0e"/>
        <curve name="/boat_state/delta" color="#d62728"/>
+       <curve name="/boat_state/r" color="#e377c2"/>
+       <curve name="/boat_state/yaw" color="#2ca02c"/>
       </plot>
      </DockArea>
     </DockSplitter>
@@ -116,7 +131,7 @@
    <max_array_size value="100"/>
    <boolean_strings_to_number value="true"/>
    <remove_suffix_from_strings value="true"/>
-   <selected_topics value="/controller_ns/controller_state;/boat_state;/cmd_thrust"/>
+   <selected_topics value="/controller_ns/controller_state;/boat_state;/cmd_rotor"/>
   </plugin>
   <plugin ID="UDP Server"/>
   <plugin ID="WebSocket Server"/>

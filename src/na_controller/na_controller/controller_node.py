@@ -5,7 +5,6 @@ import os
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32MultiArray
 from ament_index_python.packages import get_package_share_directory
 
 from na_utils.bspline import (
@@ -14,7 +13,7 @@ from na_utils.bspline import (
     samples_from_density,
 )
 from na_utils.ros_params import load_ros_params
-from na_msg.msg import BoatState, BsplinePath, ControllerState
+from na_msg.msg import BoatState, BsplinePath, ControllerState, RotorCommand
 
 
 class ControllerNode(Node):
@@ -48,7 +47,7 @@ class ControllerNode(Node):
 
         # Publisher: rotor command [thrust, delta]
         self.thrust_pub = self.create_publisher(
-            Float32MultiArray, "/cmd_thrust", 10
+            RotorCommand, "/cmd_rotor", 10
         )
 
         # Subscriber: boat state
@@ -132,8 +131,9 @@ class ControllerNode(Node):
         self._last_time = now
 
         if not self.spline or self.spline.empty():
-            msg = Float32MultiArray()
-            msg.data = [0.0, 0.0]
+            msg = RotorCommand()
+            msg.thrust = 0.0
+            msg.delta = 0.0
             self.thrust_pub.publish(msg)
             return
 
@@ -204,8 +204,9 @@ class ControllerNode(Node):
         state_msg.proj_yaw = float(proj_yaw)
         self.state_pub.publish(state_msg)
 
-        msg = Float32MultiArray()
-        msg.data = [float(thrust), float(delta)]
+        msg = RotorCommand()
+        msg.thrust = float(thrust)
+        msg.delta = float(delta)
         self.thrust_pub.publish(msg)
 
 

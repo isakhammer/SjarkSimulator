@@ -541,6 +541,7 @@ class BoatVisualizer(Node):
 
         self.pub_boat.publish(m)
 
+
 def main(args=None):
     rclpy.init(args=args)
     node = BoatVisualizer()

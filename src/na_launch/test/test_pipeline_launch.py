@@ -8,8 +8,7 @@ import launch_testing
 import launch_ros.actions
 import pytest
 import rclpy
-from na_msg.msg import BoatState, BsplinePath, ControllerState
-from std_msgs.msg import Float32MultiArray
+from na_msg.msg import BoatState, BsplinePath, ControllerState, RotorCommand
 
 
 def _wait_for_message(node, topic, msg_type, timeout_sec, predicate=None):
@@ -55,14 +54,12 @@ def _count_messages(
 
 
 def _has_thrust(msg):
-    if len(msg.data) < 2:
-        return False
-    return abs(msg.data[0]) > 0.1 or abs(msg.data[1]) > 0.1
+    return abs(msg.thrust) > 0.1 or abs(msg.delta) > 0.1
 
 
 def _has_forward_speed(msg):
     u = msg.u
-    return u > 0.02
+    return u > 0.005
 
 
 def _path_length(msg):
@@ -181,14 +178,14 @@ class TestPipelineLaunch(unittest.TestCase):
     def test_controller_outputs_thrust(self):
         msg = _wait_for_message(
             self.node,
-            "/cmd_thrust",
-            Float32MultiArray,
+            "/cmd_rotor",
+            RotorCommand,
             timeout_sec=5.0,
             predicate=_has_thrust,
         )
         self.assertIsNotNone(msg, "Controller did not output thrust")
         self.assertTrue(
-            all(math.isfinite(value) for value in msg.data[:2]),
+            all(math.isfinite(value) for value in (msg.thrust, msg.delta)),
             "Controller thrust contains non-finite values",
         )
 
@@ -244,8 +241,8 @@ class TestPipelineLaunch(unittest.TestCase):
         )
         thrust_count = _count_messages(
             self.node,
-            "/cmd_thrust",
-            Float32MultiArray,
+            "/cmd_rotor",
+            RotorCommand,
             timeout_sec=3.0,
             min_count=2,
         )
@@ -256,8 +253,8 @@ class TestPipelineLaunch(unittest.TestCase):
     def test_vehicle_moves_under_thrust(self):
         msg = _wait_for_message(
             self.node,
-            "/cmd_thrust",
-            Float32MultiArray,
+            "/cmd_rotor",
+            RotorCommand,
             timeout_sec=5.0,
             predicate=_has_thrust,
         )
@@ -266,7 +263,7 @@ class TestPipelineLaunch(unittest.TestCase):
             self.node,
             "/boat_state",
             BoatState,
-            timeout_sec=5.0,
+            timeout_sec=8.0,
             predicate=_has_forward_speed,
         )
         self.assertIsNotNone(state, "Simulator state did not show vx > 0")

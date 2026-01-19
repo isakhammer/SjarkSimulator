@@ -9,7 +9,7 @@ import launch_ros.actions
 import pytest
 import rclpy
 from nav_msgs.msg import Odometry
-from na_msg.msg import BoatState
+from na_msg.msg import BoatState, RotorCommand
 from tf2_msgs.msg import TFMessage
 
 
@@ -46,6 +46,28 @@ def _has_base_link_tf(msg):
         if transform.child_frame_id == "base_link":
             return True
     return False
+
+
+def _drive_sim_for(node, thrust, delta, duration_sec):
+    received = {"msg": None}
+
+    def callback(msg):
+        received["msg"] = msg
+
+    subscription = node.create_subscription(BoatState, "/boat_state", callback, 10)
+    publisher = node.create_publisher(RotorCommand, "/cmd_rotor", 10)
+    cmd = RotorCommand()
+    cmd.thrust = float(thrust)
+    cmd.delta = float(delta)
+    end_time = time.monotonic() + duration_sec
+    try:
+        while time.monotonic() < end_time and rclpy.ok():
+            publisher.publish(cmd)
+            rclpy.spin_once(node, timeout_sec=0.05)
+        return received["msg"]
+    finally:
+        node.destroy_subscription(subscription)
+        node.destroy_publisher(publisher)
 
 
 @pytest.mark.launch_test
@@ -134,3 +156,19 @@ class TestSim6DofLaunch(unittest.TestCase):
             self.node, "/tf", TFMessage, timeout_sec=5.0, predicate=_has_base_link_tf
         )
         self.assertIsNotNone(msg, "No TF with base_link received")
+
+    def test_simulator_yaw_response_sign(self):
+        msg = _wait_for_message(
+            self.node, "/boat_state", BoatState, timeout_sec=5.0
+        )
+        self.assertIsNotNone(msg, "No simulator state received before command")
+
+        left_cmd = _drive_sim_for(self.node, thrust=20.0, delta=-0.3, duration_sec=2.0)
+        self.assertIsNotNone(left_cmd, "No simulator state received during left command")
+        self.assertGreater(left_cmd.u, 0.05, "Surge speed did not increase under thrust")
+        self.assertGreater(left_cmd.r, 0.01, "Yaw rate did not respond to left command")
+
+        right_cmd = _drive_sim_for(self.node, thrust=20.0, delta=0.3, duration_sec=2.0)
+        self.assertIsNotNone(right_cmd, "No simulator state received during right command")
+        self.assertGreater(right_cmd.u, 0.05, "Surge speed did not increase under thrust")
+        self.assertLess(right_cmd.r, -0.01, "Yaw rate did not respond to right command")

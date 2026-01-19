@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Custom.msg"
   "msg/BsplinePath.msg"
   "msg/ControllerState.msg"
+  "msg/RotorCommand.msg"
   "msg/BoatState.msg"
   "msg/Path.msg"
   "srv/AddTwoInts.srv"

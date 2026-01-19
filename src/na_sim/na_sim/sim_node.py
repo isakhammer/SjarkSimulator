@@ -17,7 +17,7 @@ from na_sim.fossen import (
     restoring_forces_body,
     rotation_matrix_from_quaternion_wxyz,
 )
-from na_msg.msg import BoatState
+from na_msg.msg import BoatState, RotorCommand
 from na_utils.ros_params import load_ros_params
 
 
@@ -197,8 +197,8 @@ class BoatSimNode(Node):
 
         # Subscribers
         self.sub_cmd = self.create_subscription(
-            Float32MultiArray,
-            "/cmd_thrust",
+            RotorCommand,
+            "/cmd_rotor",
             self.cmd_callback,
             10
         )
@@ -247,9 +247,8 @@ class BoatSimNode(Node):
         return roll, pitch, yaw
 
     def cmd_callback(self, msg):
-        if len(msg.data) >= 2:
-            self.thrust_cmd = float(msg.data[0])
-            self.delta_cmd = float(msg.data[1])
+        self.thrust_cmd = float(msg.thrust)
+        self.delta_cmd = float(msg.delta)
 
     def update(self):
         max_thrust = float(self.get_parameter("max_thrust").value)
