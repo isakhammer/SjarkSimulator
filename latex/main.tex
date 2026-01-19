@@ -154,6 +154,7 @@ $\boldsymbol{\tau}_3=[X,Y,N]^\top$.
     $\phi,\theta,\psi$ & Roll, pitch, yaw (ZYX) & $\{W\}$ & \si{\radian} \\
     $u,v,w$ & Linear velocity & $\{B\}$ & \si{\meter\per\second} \\
     $p,q,r$ & Angular velocity & $\{B\}$ & \si{\radian\per\second} \\
+    $\mathbf{q}_{WB}$ & Unit quaternion, body-to-world & -- & -- \\
     $T$ & Thrust magnitude & $\{B\}$ & \si{\newton} \\
     $\delta$ & Steering angle (about $+z_B$) & $\{B\}$ & \si{\radian} \\
     $\ell$ & Rotor arm (rotor at $x_B=-\ell$) & $\{B\}$ & \si{\meter} \\
@@ -177,7 +178,13 @@ $\boldsymbol{\tau}_3=[X,Y,N]^\top$.
     $\boldsymbol{\eta}$ & $[x,y,z,\phi,\theta,\psi]^\top$ & $6\times 1$ \\
     $\boldsymbol{\nu}$ & $[u,v,w,p,q,r]^\top$ & $6\times 1$ \\
     $\boldsymbol{\tau}$ & $[X,Y,Z,K,M,N]^\top$ & $6\times 1$ \\
+    $\boldsymbol{\omega}$ & $[p,q,r]^\top$ & $3\times 1$ \\
+    $\Delta\mathbf{q}$ & Expmap delta quaternion & $4\times 1$ \\
+    $\boldsymbol{\phi}$ & Rotation vector, $\boldsymbol{\omega}\Delta t$ & $3\times 1$ \\
+    $\mathbf{a}$ & Unit rotation axis, $\boldsymbol{\phi}/\|\boldsymbol{\phi}\|$ & $3\times 1$ \\
+    $\boldsymbol{\xi}$ & Lie algebra coordinate for $SO(3)$ & $3\times 1$ \\
     $[\mathbf{a}]_\times$ & $\mathbf{a}\times\mathbf{b}=[\mathbf{a}]_\times\mathbf{b}$ & $3\times 3$ \\
+    $\boldsymbol{\Omega}(\boldsymbol{\omega})$ & Quaternion kinematic matrix & $4\times 4$ \\
     $\mathbf{R}(\cdot)$ & Body-to-world rotation & $3\times 3$ \\
     $\mathbf{J}(\boldsymbol{\eta})$ & Kinematic transform in $\dot{\boldsymbol{\eta}}=\mathbf{J}\boldsymbol{\nu}$ & $6\times 6$ \\
     \bottomrule
@@ -587,8 +594,8 @@ equations above to return $\dot{\mathbf{x}}$.
 
 \subsubsection{Purpose}
 This subsection states the standard 6~DOF model used in Fossen-style marine
-craft simulation. It is not implemented in the current codebase, but it provides
-a consistent extension path from the 3~DOF model.
+craft simulation and matches the implementation in
+\texttt{src/na\_sim/na\_sim/fossen.py} (\texttt{Fossen6DOF}).
 
 \subsubsection{Kinematics}
 Let $\boldsymbol{\eta}=[x,y,z,\phi,\theta,\psi]^\top$ and
@@ -678,12 +685,29 @@ The corresponding rotation matrix $\mathbf{R}(\mathbf{q}_{WB})$ is:
   \end{bmatrix}.
 \]
 
+The Euler-angle and quaternion kinematics are consistent when they use the same
+body-rate $\boldsymbol{\omega}$. The Euler form uses
+$\dot{\boldsymbol{\eta}}=\mathbf{J}(\boldsymbol{\eta})\boldsymbol{\nu}$ with the
+mapping $\dot{\boldsymbol{\Theta}}=\mathbf{T}(\phi,\theta)\boldsymbol{\omega}$,
+while the quaternion form uses
+$\dot{\mathbf{q}}_{WB}=\tfrac{1}{2}\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}_{WB}$
+and $\dot{\mathbf{p}}=\mathbf{R}(\mathbf{q}_{WB})\mathbf{v}$. For any set of
+Euler angles $(\phi,\theta,\psi)$, the rotation matrix
+$\mathbf{R}(\phi,\theta,\psi)$ equals $\mathbf{R}(\mathbf{q}_{WB})$ for the
+equivalent unit quaternion, so the translational kinematics are identical away
+from the Euler singularity at $\cos\theta=0$.
+
 If a rotation-matrix state is preferred, one can integrate
 $\dot{\mathbf{R}}=\mathbf{R}[\boldsymbol{\omega}]_\times$ and periodically
 re-orthonormalize $\mathbf{R}$, or use a Lie-group update
 $\mathbf{R}_{k+1}=\mathbf{R}_k\exp([\boldsymbol{\omega}\Delta t]_\times)$.
 
 ROS~2 messages store quaternions as $(x,y,z,w)$.
+Integrator theory (Euler, RK4, expmap, RKMK) is summarized in
+\Cref{app:integrators} with an equation-by-equation mapping to the 6~DOF
+implementation in \Cref{app:fossen-map}. The key update formulas are
+Euler (\Cref{eq:euler}), RK4 (\Cref{eq:rk4}), and the expmap step
+(\Cref{eq:expmap-dq,eq:expmap-update}).
 
 \subsubsection{Dynamics}
 The standard 6~DOF equations of motion in a body-fixed frame are:
@@ -880,7 +904,23 @@ $\boldsymbol{\tau}_{\mathrm{env}}$, compute:
     + \mathbf{M}_A \dot{\boldsymbol{\nu}}_c
   \Big),
 \]
-and integrate with RK4. Normalize $\mathbf{q}_{WB}$ after each integration step.
+where $\mathbf{C}_{RB}$ and $\mathbf{C}_A$ are constructed from the corresponding
+mass matrices using the momentum-based skew form, and
+$\mathbf{D}(\boldsymbol{\nu}_r)\boldsymbol{\nu}_r$ is the sum of diagonal linear
+and quadratic damping. In the code this is implemented by
+\texttt{Fossen6DOF.state\_derivative()} and \texttt{Fossen6DOF.dynamics()} using
+\texttt{coriolis\_from\_mass\_matrix()} and \texttt{damping()} in
+\texttt{src/na\_sim/na\_sim/fossen.py}.
+
+Integration uses \texttt{Fossen6DOF.step()} with one of:
+\begin{itemize}
+  \item \texttt{euler}: forward Euler on the full 13-state, then normalize
+    $\mathbf{q}_{WB}$.
+  \item \texttt{rk4}: RK4 on the full 13-state, then normalize $\mathbf{q}_{WB}$.
+  \item \texttt{expmap}: RK4 on $\mathbf{p}$ and $\boldsymbol{\nu}$, and the
+    expmap attitude update in \Cref{app:integrators} using the RK4-averaged
+    angular rate (see \Cref{app:fossen-map}).
+\end{itemize}
 
 \subsubsection{Sanity checks (recommended tests)}
 The following checks catch most sign and frame mistakes before tuning:
@@ -987,6 +1027,124 @@ document aligned with the code:
     \texttt{latex/scripts/generate\_figures.py} and update the inline TikZ blocks
     in this file.
   \item Refresh example figures if coordinate conventions or sign choices change.
+\end{itemize}
+
+\appendix
+\section{Integrator theory}
+\label{app:integrators}
+
+\subsection{Time integration of ordinary differential equations}
+Consider the initial value problem
+\begin{equation}
+  \dot{\mathbf{x}} = f(\mathbf{x}, t), \qquad \mathbf{x}(t_0)=\mathbf{x}_0.
+  \label{eq:ode}
+\end{equation}
+Forward Euler advances one step as
+\begin{equation}
+  \mathbf{x}_{k+1} = \mathbf{x}_k + \Delta t\, f(\mathbf{x}_k, t_k).
+  \label{eq:euler}
+\end{equation}
+The classical fourth-order Runge--Kutta method (RK4) uses
+\begin{align}
+  \mathbf{k}_1 &= f(\mathbf{x}_k, t_k), \nonumber \\
+  \mathbf{k}_2 &= f(\mathbf{x}_k + \tfrac{\Delta t}{2}\mathbf{k}_1, t_k + \tfrac{\Delta t}{2}), \nonumber \\
+  \mathbf{k}_3 &= f(\mathbf{x}_k + \tfrac{\Delta t}{2}\mathbf{k}_2, t_k + \tfrac{\Delta t}{2}), \nonumber \\
+  \mathbf{k}_4 &= f(\mathbf{x}_k + \Delta t\,\mathbf{k}_3, t_k + \Delta t), \nonumber \\
+  \mathbf{x}_{k+1} &= \mathbf{x}_k + \tfrac{\Delta t}{6}(\mathbf{k}_1 + 2\mathbf{k}_2 + 2\mathbf{k}_3 + \mathbf{k}_4).
+  \label{eq:rk4}
+\end{align}
+
+\subsection{Quaternion exponential-map update}
+Quaternion kinematics for body-rate $\boldsymbol{\omega}$ are
+\begin{equation}
+  \dot{\mathbf{q}} = \tfrac{1}{2}\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}.
+  \label{eq:quat-kin}
+\end{equation}
+For constant $\boldsymbol{\omega}$ over $\Delta t$, define the rotation vector
+$\boldsymbol{\phi}=\boldsymbol{\omega}\Delta t$ with $\theta=\|\boldsymbol{\phi}\|$
+and $\mathbf{a}=\boldsymbol{\phi}/\theta$. The exponential map gives the delta
+quaternion
+\begin{equation}
+  \Delta\mathbf{q}=
+  \begin{bmatrix}
+    \cos(\theta/2) \\
+    \sin(\theta/2)\,\mathbf{a}
+  \end{bmatrix}.
+  \label{eq:expmap-dq}
+\end{equation}
+The attitude update is the group composition
+\begin{equation}
+  \mathbf{q}_{k+1}=\Delta\mathbf{q}\otimes\mathbf{q}_k.
+  \label{eq:expmap-update}
+\end{equation}
+For small angles, use the approximation
+\begin{equation}
+  \Delta\mathbf{q}\approx [1,\tfrac{1}{2}\boldsymbol{\phi}]^\top.
+  \label{eq:expmap-small}
+\end{equation}
+
+\subsection{RKMK overview}
+Runge--Kutta--Munthe-Kaas (RKMK) methods integrate on the Lie algebra and map
+back to the group with the exponential map. A first-order update uses
+\begin{equation}
+  \mathbf{R}_{k+1} = \mathbf{R}_k \exp([\boldsymbol{\xi}]_\times),
+  \label{eq:rkmk-update}
+\end{equation}
+where $\boldsymbol{\xi}\in\mathbb{R}^3$ is an algebra increment obtained from a
+Runge--Kutta scheme applied to the local coordinates. Higher-order variants
+combine multiple stages in $\mathfrak{so}(3)$ before exponentiating.
+
+\section{Applying integrators to the Fossen 6~DOF model}
+\label{app:fossen-map}
+The simulator state is
+\[
+  \mathbf{x}_6 =
+  \begin{bmatrix}
+    \mathbf{p} \\
+    \mathbf{q}_{WB} \\
+    \boldsymbol{\nu}
+  \end{bmatrix},
+  \quad
+  \boldsymbol{\nu}=
+  \begin{bmatrix}
+    \mathbf{v} \\
+    \boldsymbol{\omega}
+  \end{bmatrix},
+\]
+with kinematics and dynamics:
+\begin{align}
+  \dot{\mathbf{p}} &= \mathbf{R}(\mathbf{q}_{WB})\mathbf{v}, \label{eq:fossen-kin-p} \\
+  \dot{\mathbf{q}}_{WB} &= \tfrac{1}{2}\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}_{WB}, \label{eq:fossen-kin-q} \\
+  \dot{\boldsymbol{\nu}} &=
+  \mathbf{M}^{-1}\!\Big(
+    \boldsymbol{\tau}+\boldsymbol{\tau}_{\mathrm{env}}
+    - \mathbf{C}_{RB}(\boldsymbol{\nu})\boldsymbol{\nu}
+    - \mathbf{C}_{A}(\boldsymbol{\nu}_r)\boldsymbol{\nu}_r
+    - \mathbf{D}(\boldsymbol{\nu}_r)\boldsymbol{\nu}_r
+    - \mathbf{g}(\boldsymbol{\eta})
+    + \mathbf{M}_A \dot{\boldsymbol{\nu}}_c
+  \Big).
+  \label{eq:fossen-dyn}
+\end{align}
+
+\paragraph{Equation-by-equation mapping to code}
+\begin{itemize}
+  \item \Cref{eq:fossen-kin-p,eq:fossen-kin-q} are implemented in
+    \texttt{Fossen6DOF.kinematics()} using \texttt{rotation\_matrix\_from\_quaternion\_wxyz()}
+    and \texttt{quaternion\_derivative\_wxyz()}.
+  \item \Cref{eq:fossen-dyn} is implemented in \texttt{Fossen6DOF.dynamics()} with
+    $\mathbf{C}_{RB}$ and $\mathbf{C}_A$ built by \texttt{coriolis\_from\_mass\_matrix()},
+    and damping $\mathbf{D}$ from diagonal linear and quadratic terms in
+    \texttt{Fossen6DOF.damping()}.
+  \item Restoring forces $\mathbf{g}(\boldsymbol{\eta})$ use
+    \texttt{restoring\_forces\_body()} with $\mathbf{R}^\top(\mathbf{q}_{WB})$.
+  \item The full state derivative is assembled in
+    \texttt{Fossen6DOF.state\_derivative()}.
+  \item Integration uses \Cref{eq:euler} or \Cref{eq:rk4} in
+    \texttt{Fossen6DOF.step()} for \texttt{euler} and \texttt{rk4} modes.
+  \item The \texttt{expmap} mode uses \Cref{eq:rk4} for $\mathbf{p}$ and
+    $\boldsymbol{\nu}$, and \Cref{eq:expmap-dq,eq:expmap-update} for attitude
+    using the RK4-averaged angular rate.
 \end{itemize}
 
 \end{document}
