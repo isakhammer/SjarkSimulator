@@ -77,8 +77,7 @@
        <curve name="/cmd_rotor/delta" color="#ff7f0e"/>
        <curve name="/boat_state/delta" color="#d62728"/>
        <curve name="/boat_state/r" color="#e377c2"/>
-       <curve name="/boat_state/yaw" color="#2ca02c"/>
-      </plot>
+     </plot>
      </DockArea>
     </DockSplitter>
    </Container>
