@@ -19,7 +19,9 @@ class BoatVisualizer(Node):
         super().__init__("boat_visualizer")
         self.declare_parameter("samples_per_meter", 4.0)
         self.declare_parameter("map_frame", "map")
+        self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("frenet_frame", "path_frenet")
+        self.declare_parameter("flip_tf_yaw", True)
         self.declare_parameter("debug_force_scale", 0.01)
         self.declare_parameter("debug_moment_scale", 0.02)
         self.declare_parameter("debug_thrust_scale", 0.01)
@@ -29,7 +31,9 @@ class BoatVisualizer(Node):
         self.declare_parameter("debug_marker_head_diameter", 0.08)
         self.declare_parameter("debug_marker_head_length", 0.12)
         self.map_frame = str(self.get_parameter("map_frame").value)
+        self.base_frame = str(self.get_parameter("base_frame").value)
         self.frenet_frame = str(self.get_parameter("frenet_frame").value)
+        self.flip_tf_yaw = bool(self.get_parameter("flip_tf_yaw").value)
 
         # Subscriptions
         self.sub_odom = self.create_subscription(
@@ -200,6 +204,15 @@ class BoatVisualizer(Node):
     # --------------------------------------------------------
     def odom_cb(self, msg):
         self.last_pose = msg.pose.pose
+        t = TransformStamped()
+        t.header = msg.header
+        t.header.frame_id = self.map_frame
+        t.child_frame_id = self.base_frame
+        t.transform.translation.x = msg.pose.pose.position.x
+        t.transform.translation.y = msg.pose.pose.position.y
+        t.transform.translation.z = msg.pose.pose.position.z
+        t.transform.rotation = msg.pose.pose.orientation
+        self.tf_broadcaster.sendTransform(t)
         self.update_path_trace(msg)
         self.publish_boat_marker(msg)
 
@@ -494,6 +507,8 @@ class BoatVisualizer(Node):
 
     def publish_frenet_from_state(self, msg):
         yaw = float(msg.proj_yaw)
+        if self.flip_tf_yaw:
+            yaw = -yaw
         qz = float(np.sin(yaw / 2.0))
         qw = float(np.cos(yaw / 2.0))
 

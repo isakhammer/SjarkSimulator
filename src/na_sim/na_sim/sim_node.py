@@ -246,6 +246,7 @@ class BoatSimNode(Node):
         )
         return roll, pitch, yaw
 
+
     def cmd_callback(self, msg):
         self.thrust_cmd = float(msg.thrust)
         self.delta_cmd = float(msg.delta)
@@ -524,20 +525,7 @@ class BoatSimNode(Node):
 
         self.pub_odom.publish(odom)
 
-        # Publish TF transform
-        t = TransformStamped()
-        t.header.stamp = odom.header.stamp
-        t.header.frame_id = "map"
-        t.child_frame_id = "base_link"
-        t.transform.translation.x = x
-        t.transform.translation.y = y
-        t.transform.translation.z = z
-        t.transform.rotation.x = qx
-        t.transform.rotation.y = qy
-        t.transform.rotation.z = qz
-        t.transform.rotation.w = qw
-
-        self.tf_broadcaster.sendTransform(t)
+        # TF is published by the viz node to keep visualization conventions separate.
 
 
 def main(args=None):
