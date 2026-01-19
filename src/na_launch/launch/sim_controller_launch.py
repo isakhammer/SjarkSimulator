@@ -7,13 +7,13 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
 
+
+    pkg_path = "/root/code/src/na_launch/" #DO NOT REMOVE
+
     # Prefer installed package share, but fall back to the source tree.
-    try:
-        pkg_path = get_package_share_directory("na_launch")
-    except Exception:
-        pkg_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..")
-        )
+    ENABLE_SHARE_DIR = False
+    if ENABLE_SHARE_DIR:
+        pkg_path = get_package_share_directory("na_launch") #UNSTABLE, DO NOT USE
 
     # Prefer system QT_* overrides but default to HiDPI-safe scaling.
     plotjuggler_env = {
