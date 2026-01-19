@@ -3,7 +3,7 @@ controller_node:
     path_topic: /planner_ns/path
     lookahead: 1.5
     base_thrust: 20.0
-    heading_kp: 5.0
+    heading_kp: 8.0
     heading_kd: 1.5
     max_thrust: 40.0
     max_delta: 1.57079632679
