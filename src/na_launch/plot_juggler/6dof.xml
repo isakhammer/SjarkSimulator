@@ -68,6 +68,30 @@
     </DockSplitter>
    </Container>
   </Tab>
+  <Tab tab_name="forces" containers="1">
+   <Container>
+    <DockSplitter orientation="-" count="2" sizes="0.5;0.5">
+     <DockArea name="...">
+      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
+       <range top="1.000000" right="1.000000" bottom="-1.000000" left="0.000000"/>
+       <limitY/>
+       <curve name="/boat_state/tau_x" color="#1f77b4"/>
+       <curve name="/boat_state/tau_y" color="#ff7f0e"/>
+       <curve name="/boat_state/tau_z" color="#2ca02c"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
+       <range top="1.000000" right="1.000000" bottom="-1.000000" left="0.000000"/>
+       <limitY/>
+       <curve name="/boat_state/tau_k" color="#9467bd"/>
+       <curve name="/boat_state/tau_m" color="#8c564b"/>
+       <curve name="/boat_state/tau_n" color="#e377c2"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
   <currentTabIndex index="0"/>
  </tabbed_widget>
  <use_relative_time_offset enabled="1"/>
