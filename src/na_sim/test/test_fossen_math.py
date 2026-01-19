@@ -101,8 +101,8 @@ def test_planar_matrix_form_matches_boat3dof_dynamics():
     dx_ref = boat.dynamics(state, thrust, delta)
 
     x, y, psi, u, v, r = state
-    dx = u * math.cos(psi) - v * math.sin(psi)
-    dy = u * math.sin(psi) + v * math.cos(psi)
+    dx = u * math.cos(psi) + v * math.sin(psi)
+    dy = -u * math.sin(psi) + v * math.cos(psi)
     dpsi = r
 
     x_force = thrust * math.cos(delta)
