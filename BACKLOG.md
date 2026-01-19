@@ -67,3 +67,4 @@ Acceptance checks
 - Rotor angle convention: 0° = forward along +x, + = port/CCW? (pick and document).
 - Actuator command representation: absolute rotor angle vs relative to hull heading.
 - Whether to keep `/cmd_thrust` as the primary command topic long-term or migrate to a dedicated message.
+- Add derived/world-frame force and moment fields to `na_msg/BoatState`.
