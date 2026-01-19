@@ -173,14 +173,15 @@ class ControllerNode(Node):
         if abs(tx) < 1e-6 and abs(ty) < 1e-6:
             proj_yaw = 0.0
         else:
-            proj_yaw = math.atan2(ty, tx)
+            # Convert geometric tangent (CCW-positive) to NED yaw (clockwise-positive).
+            proj_yaw = -math.atan2(ty, tx)
 
         target_t = self.spline.advance_t(proj_t, lookahead)
         target_sample = self.spline.sample_at_t(target_t)
         target_x, target_y = target_sample.point
 
         desired_heading = self.wrap_to_pi(
-            proj_yaw - math.atan2(cte, lookahead)
+            proj_yaw + math.atan2(cte, lookahead)
         )
         heading_error = self.wrap_to_pi(desired_heading - psi)
 

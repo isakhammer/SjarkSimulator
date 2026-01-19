@@ -87,18 +87,17 @@ conventions used throughout the document.
 The simulator uses a world frame $\{W\}$ and a body frame $\{B\}$, corresponding
 to ROS~2 \texttt{map} and \texttt{base\_link}, respectively.
 \begin{itemize}
-  \item $\{W\}$ is inertial and right-handed; $+z_W$ points upward.
+  \item $\{W\}$ is inertial and right-handed; $+z_W$ points downward (NED).
   \item $\{B\}$ is body-fixed and right-handed; $+x_B$ points forward, $+y_B$
-    points to port (left), and $+z_B$ points upward.
+    points to starboard (right), and $+z_B$ points downward (FRD).
 \end{itemize}
 All angles follow the right-hand rule. The yaw angle $\psi$ is a rotation about
-$+z_W$; positive yaw is counter-clockwise when viewed from above.
+$+z_W$; positive yaw is clockwise (right turn) when viewed from above.
 
 \paragraph{Marine-convention note.}
-Fossen and much of the marine literature use NED/FRD conventions (world $z$
-down, body $y$ starboard, body $z$ down). This document and the current ROS~2
-implementation use ENU/FLU-style conventions to match standard ROS frames. When
-comparing formulas, the following constant transforms are useful:
+This document follows the Fossen NED/FRD convention. ROS~2 visualization tools
+often assume ENU/FLU frames; when comparing formulas or plotting in ROS, the
+following constant transforms are useful:
 \[
   \mathbf{T}_{\mathrm{ENU}\leftarrow\mathrm{NED}} =
   \begin{bmatrix}
@@ -140,7 +139,8 @@ $\{B\}$. The current simulator is planar (3~DOF) and uses:
 \]
 
 The control input is a stern-mounted steerable rotor producing a thrust
-magnitude $T$ and a steering angle $\delta$ relative to $+x_B$ (positive CCW).
+magnitude $T$ and a steering angle $\delta$ relative to $+x_B$ (positive to
+starboard/right).
 Generalized forces and moments are collected in
 $\boldsymbol{\tau}=[X,Y,Z,K,M,N]^\top$ (body frame). The planar simulator uses
 $\boldsymbol{\tau}_3=[X,Y,N]^\top$.
@@ -351,12 +351,13 @@ The controller follows a line-of-sight (LOS) guidance pattern:
 \begin{enumerate}
   \item If no valid spline is available, publish $[0,0]$ and exit.
   \item Project $(x,y)$ onto the path to get $t$, tangent, normal, and $cte$.
-  \item Compute the path heading $\psi_{path}$ from the tangent; if the tangent
-    norm is near zero, $\psi_{path}=0$.
+  \item Compute the path heading $\psi_{path}$ from the tangent; under NED this
+    uses $\psi_{path} = -\arctan2(t_y, t_x)$, and if the tangent norm is near
+    zero, $\psi_{path}=0$.
   \item Choose a lookahead distance $L$ and advance to $t_{target}=t+L$.
   \item Compute desired heading
     \[
-      \psi_d = \mathrm{wrap}\left(\psi_{path} - \arctan2(cte, L)\right).
+      \psi_d = \mathrm{wrap}\left(\psi_{path} + \arctan2(cte, L)\right).
     \]
   \item Apply a PD law on heading error with saturation:
     \[
@@ -545,15 +546,15 @@ $\boldsymbol{\nu}_3=[u,v,r]^\top$. The kinematics are:
   \dot{\boldsymbol{\eta}}_3 = \mathbf{J}(\psi)\boldsymbol{\nu}_3, \qquad
   \mathbf{J}(\psi) =
   \begin{bmatrix}
-    \cos\psi & -\sin\psi & 0 \\
-    \sin\psi &  \cos\psi & 0 \\
-    0        &  0        & 1
+    \cos\psi & \sin\psi & 0 \\
+    -\sin\psi &  \cos\psi & 0 \\
+    0         &  0        & 1
   \end{bmatrix},
 \]
 which expands to:
 \begin{align}
-  \dot{x} &= u\cos\psi - v\sin\psi, \\
-  \dot{y} &= u\sin\psi + v\cos\psi, \\
+  \dot{x} &= u\cos\psi + v\sin\psi, \\
+  \dot{y} &= -u\sin\psi + v\cos\psi, \\
   \dot{\psi} &= r.
 \end{align}
 
@@ -565,6 +566,8 @@ The steerable rotor produces:
   N &= -\ell\,Y = -\ell\,T\sin\delta,
 \end{align}
 and the generalized input is $\boldsymbol{\tau}_3=[X,Y,N]^\top$.
+With NED/FRD conventions, $\delta>0$ (starboard/right) implies $N<0$ and a
+counterclockwise yaw response ($r<0$).
 
 \paragraph{Dynamics (Fossen-style structure)}
 The planar equations are written in the standard marine craft form:

@@ -435,8 +435,8 @@ class BoatSimNode(Node):
             state_debug.restoring_m = float(g_vec[4])
             state_debug.restoring_n = float(g_vec[5])
         else:
-            x_dot = u * math.cos(psi) - v * math.sin(psi)
-            y_dot = u * math.sin(psi) + v * math.cos(psi)
+            x_dot = u * math.cos(psi) + v * math.sin(psi)
+            y_dot = -u * math.sin(psi) + v * math.cos(psi)
             state_debug.x_dot = float(x_dot)
             state_debug.y_dot = float(y_dot)
             state_debug.z_dot = 0.0

@@ -441,8 +441,8 @@ class ProjectionTracker:
         tx, ty = last_sample.tangent
         if abs(tx) < 1e-6 and abs(ty) < 1e-6:
             return 0.0, None
-        vx = u * math.cos(psi) - v * math.sin(psi)
-        vy = u * math.sin(psi) + v * math.cos(psi)
+        vx = u * math.cos(psi) + v * math.sin(psi)
+        vy = -u * math.sin(psi) + v * math.cos(psi)
         along_speed = vx * tx + vy * ty
         return along_speed * dt, along_speed
 

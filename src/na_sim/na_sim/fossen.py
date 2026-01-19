@@ -2,10 +2,10 @@
 Fossen-style marine craft math helpers.
 
 This module provides small, testable building blocks for 6-DOF marine craft
-simulation in a ROS 2-friendly ENU/FLU convention:
+simulation in full Fossen NED/FRD conventions:
 
-- World frame {W}: right-handed, +z up.
-- Body frame {B}: right-handed, +x forward, +y left, +z up.
+- World frame {W}: right-handed, +z down (NED).
+- Body frame {B}: right-handed, +x forward, +y starboard, +z down (FRD).
 
 The functions are written to support:
   M * nu_dot + C(nu) * nu + ... = tau
@@ -318,7 +318,7 @@ def _diag_or_matrix(value: Optional[Iterable[float] | np.ndarray]) -> np.ndarray
 
 class Fossen6DOF:
     """
-    Minimal 6-DOF marine craft model using Fossen-style equations (ENU/FLU).
+    Minimal 6-DOF marine craft model using Fossen-style equations (NED/FRD).
 
     State uses position in world and quaternion body-to-world orientation with
     body-frame velocities: [x, y, z, qw, qx, qy, qz, u, v, w, p, q, r].

@@ -14,7 +14,7 @@ The model uses the standard marine craft equations:
 GENERALIZED FORCES (X, Y, N):
  Rotor-to-force mapping:
     thrust : Rotor force magnitude [N]
-    delta  : Rotor angle [rad] relative to body +x (CCW positive).
+    delta  : Rotor angle [rad] relative to body +x (positive to starboard/right).
 
     X : Surge force  [N]
         Positive along the boat's +x axis (forward).
@@ -22,7 +22,7 @@ GENERALIZED FORCES (X, Y, N):
             X = thrust * cos(delta)
 
     Y : Sway force   [N]
-        Lateral force along the +y axis (port/left, ROS FLU).
+        Lateral force along the +y axis (starboard/right, Fossen FRD).
         Computed from the rotor inputs as:
             Y = thrust * sin(delta)
 
@@ -30,6 +30,8 @@ GENERALIZED FORCES (X, Y, N):
         Turning moment about the vertical z-axis from the stern rotor.
         If the rotor is placed behind the CG at x = -l:
             N = (-l) * Y = -l * thrust * sin(delta)
+        Positive yaw is a right turn (clockwise), so delta and yaw have
+        opposite signs.
 
 MODEL PARAMETERS (provided via `params`):
 
@@ -52,10 +54,10 @@ STATE VECTOR:
 
     state = [x, y, psi, u, v, r]
 
-    x, y : Inertial position in world frame (ENU)
-    psi  : Heading angle (yaw) [rad]
+    x, y : Inertial position in world frame (NED)
+    psi  : Heading angle (yaw) [rad], positive right (clockwise)
     u    : Surge velocity (forward) [m/s]
-    v    : Sway velocity (sideways, +y port/left) [m/s]
+    v    : Sway velocity (sideways, +y starboard/right) [m/s]
     r    : Yaw rate [rad/s]
 
 The model is sufficient for control system design, trajectory following,
@@ -82,8 +84,8 @@ class Boat3DOF:
         x, y, psi, u, v, r = state
 
         # Kinematics
-        dx = u * np.cos(psi) - v * np.sin(psi)
-        dy = u * np.sin(psi) + v * np.cos(psi)
+        dx = u * np.cos(psi) + v * np.sin(psi)
+        dy = -u * np.sin(psi) + v * np.cos(psi)
         dpsi = r
 
         # Input to generalized forces
