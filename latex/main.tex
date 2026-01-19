@@ -208,7 +208,24 @@ For $\mathbf{a}=[a_x,a_y,a_z]^\top$, define the cross-product (skew) operator:
 \]
 The matrix exponential $\exp([\mathbf{a}]_\times)$ maps the rotation vector
 $\mathbf{a}$ to a rotation in $SO(3)$ (Rodrigues' formula), and is used in the
-expmap update with $\mathbf{a}=\boldsymbol{\omega}\Delta t$.
+expmap update with $\mathbf{a}=\boldsymbol{\omega}\Delta t$. Note that the
+exponential of a skew-symmetric matrix is computed via the matrix exponential
+(Rodrigues), not elementwise.
+An easy example is $\mathbf{a}=[0,0,\theta]^\top$:
+\[
+  [\mathbf{a}]_\times =
+  \begin{bmatrix}
+    0 & -\theta & 0 \\
+    \theta & 0 & 0 \\
+    0 & 0 & 0
+  \end{bmatrix}, \qquad
+  \exp([\mathbf{a}]_\times) =
+  \begin{bmatrix}
+    \cos\theta & -\sin\theta & 0 \\
+    \sin\theta & \cos\theta & 0 \\
+    0 & 0 & 1
+  \end{bmatrix}.
+\]
 
 \subsection{Notation collisions}
 The code uses $u$ for both surge velocity (a standard marine convention) and the
@@ -1091,6 +1108,16 @@ For constant $\boldsymbol{\omega}$ over $\Delta t$, define the rotation vector
 $\boldsymbol{\phi}=\boldsymbol{\omega}\Delta t$ with $\theta=\|\boldsymbol{\phi}\|$
 and $\mathbf{a}=\boldsymbol{\phi}/\theta$. The skew operator $[\cdot]_\times$ is
 defined in \Cref{sec:definitions} and is used in $\exp([\boldsymbol{\phi}]_\times)$.
+For example, if $\boldsymbol{\phi}=[0,0,\theta]^\top$ then
+\[
+  \exp([\boldsymbol{\phi}]_\times)=
+  \begin{bmatrix}
+    \cos\theta & -\sin\theta & 0 \\
+    \sin\theta & \cos\theta & 0 \\
+    0 & 0 & 1
+  \end{bmatrix},
+\]
+which is a rotation about the $z$ axis.
 The exponential map gives the delta quaternion
 \begin{equation}
   \Delta\mathbf{q}=
