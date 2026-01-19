@@ -14,7 +14,7 @@ from na_utils.bspline import (
     samples_from_density,
 )
 from na_utils.ros_params import load_ros_params
-from na_msg.msg import BsplinePath, ControllerState
+from na_msg.msg import BoatState, BsplinePath, ControllerState
 
 
 class ControllerNode(Node):
@@ -51,9 +51,9 @@ class ControllerNode(Node):
             Float32MultiArray, "/cmd_thrust", 10
         )
 
-        # Subscriber: boat state [x, y, psi, u, v, r]
+        # Subscriber: boat state
         self.state_sub = self.create_subscription(
-            Float32MultiArray, "/boat_state", self.state_callback, 10
+            BoatState, "/boat_state", self.state_callback, 10
         )
 
         # Subscriber: planner spline path
@@ -77,9 +77,15 @@ class ControllerNode(Node):
         self._last_time = None
         self.get_logger().info("Boat LOS controller started")
 
-    def state_callback(self, msg: Float32MultiArray) -> None:
-        if len(msg.data) >= 6:
-            self.state = list(msg.data)
+    def state_callback(self, msg: BoatState) -> None:
+        self.state = [
+            float(msg.x),
+            float(msg.y),
+            float(msg.yaw),
+            float(msg.u),
+            float(msg.v),
+            float(msg.r),
+        ]
 
     def path_callback(self, msg: BsplinePath) -> None:
         n = len(msg.ctrl_x)
