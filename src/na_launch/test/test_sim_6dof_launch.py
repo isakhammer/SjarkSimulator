@@ -9,7 +9,7 @@ import launch_ros.actions
 import pytest
 import rclpy
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Float32MultiArray
+from na_msg.msg import BoatState
 from tf2_msgs.msg import TFMessage
 
 
@@ -91,14 +91,14 @@ class TestSim6DofLaunch(unittest.TestCase):
 
     def test_simulator_publishes_state(self):
         msg = _wait_for_message(
-            self.node, "/boat_state", Float32MultiArray, timeout_sec=5.0
+            self.node, "/boat_state", BoatState, timeout_sec=5.0
         )
         self.assertIsNotNone(msg, "No simulator state received")
-        self.assertGreaterEqual(
-            len(msg.data), 6, "Simulator state is incomplete"
-        )
         self.assertTrue(
-            all(math.isfinite(value) for value in msg.data[:6]),
+            all(
+                math.isfinite(value)
+                for value in (msg.x, msg.y, msg.yaw, msg.u, msg.v, msg.r)
+            ),
             "Simulator state contains non-finite values",
         )
 

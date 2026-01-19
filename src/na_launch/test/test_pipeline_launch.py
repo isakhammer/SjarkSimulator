@@ -8,7 +8,7 @@ import launch_testing
 import launch_ros.actions
 import pytest
 import rclpy
-from na_msg.msg import BsplinePath, ControllerState
+from na_msg.msg import BoatState, BsplinePath, ControllerState
 from std_msgs.msg import Float32MultiArray
 
 
@@ -61,9 +61,7 @@ def _has_thrust(msg):
 
 
 def _has_forward_speed(msg):
-    if len(msg.data) < 6:
-        return False
-    u = msg.data[3]
+    u = msg.u
     return u > 0.02
 
 
@@ -169,14 +167,14 @@ class TestPipelineLaunch(unittest.TestCase):
 
     def test_simulator_publishes_state(self):
         msg = _wait_for_message(
-            self.node, "/boat_state", Float32MultiArray, timeout_sec=5.0
+            self.node, "/boat_state", BoatState, timeout_sec=5.0
         )
         self.assertIsNotNone(msg, "No simulator state received")
-        self.assertGreaterEqual(
-            len(msg.data), 6, "Simulator state is incomplete"
-        )
         self.assertTrue(
-            all(math.isfinite(value) for value in msg.data[:6]),
+            all(
+                math.isfinite(value)
+                for value in (msg.x, msg.y, msg.yaw, msg.u, msg.v, msg.r)
+            ),
             "Simulator state contains non-finite values",
         )
 
@@ -237,7 +235,7 @@ class TestPipelineLaunch(unittest.TestCase):
         state_count = _count_messages(
             self.node,
             "/boat_state",
-            Float32MultiArray,
+            BoatState,
             timeout_sec=3.0,
             min_count=2,
         )
@@ -267,7 +265,7 @@ class TestPipelineLaunch(unittest.TestCase):
         state = _wait_for_message(
             self.node,
             "/boat_state",
-            Float32MultiArray,
+            BoatState,
             timeout_sec=5.0,
             predicate=_has_forward_speed,
         )

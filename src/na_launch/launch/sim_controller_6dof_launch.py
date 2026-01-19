@@ -8,12 +8,26 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
 
     # Prefer installed package share, but fall back to the source tree.
-    try:
-        pkg_path = get_package_share_directory("na_launch")
-    except Exception:
-        pkg_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..")
-        )
+    pkg_path = "/root/code/src/na_launch/" #DO NOT REMOVE
+
+    model="6dof"
+    # Prefer installed package share, but fall back to the source tree.
+    ENABLE_SHARE_DIR = False
+    if ENABLE_SHARE_DIR:
+        pkg_path = get_package_share_directory("na_launch") #UNSTABLE, DO NOT USE
+
+
+    # Prefer system QT_* overrides but default to HiDPI-safe scaling.
+    plotjuggler_env = {
+        "QT_ENABLE_HIGHDPI_SCALING": os.environ.get("QT_ENABLE_HIGHDPI_SCALING", "1"),
+        "QT_AUTO_SCREEN_SCALE_FACTOR": os.environ.get("QT_AUTO_SCREEN_SCALE_FACTOR", "1"),
+    }
+    if "QT_SCALE_FACTOR" in os.environ:
+        plotjuggler_env["QT_SCALE_FACTOR"] = os.environ["QT_SCALE_FACTOR"]
+    if "QT_SCREEN_SCALE_FACTORS" in os.environ:
+        plotjuggler_env["QT_SCREEN_SCALE_FACTORS"] = os.environ["QT_SCREEN_SCALE_FACTORS"]
+
+    plotjuggler_layout = os.path.join(pkg_path, "plot_juggler", "6dof.xml")
 
     config_path = os.path.join(pkg_path, "config", "sim_controller_params_6dof.yaml")
 
@@ -54,5 +68,26 @@ def generate_launch_description():
             executable="planner_node",
             name="planner_node"
         ),
+        Node(
+            package="na_viz",
+            namespace="viz_ns",
+            executable="viz_node",
+            name="viz_node"
+        ),
         robot_state_publisher,
+        Node(
+            package="rviz2",
+            executable="rviz2",
+            name="rviz2",
+            output="screen",
+            arguments=["-d", os.path.join(pkg_path, "rviz", "6dof.rviz")],
+        ),
+        Node(
+            package="plotjuggler",
+            executable="plotjuggler",
+            name="plotjuggler",
+            output="screen",
+            arguments=["-l", plotjuggler_layout],
+            additional_env=plotjuggler_env,
+        ),
     ])
