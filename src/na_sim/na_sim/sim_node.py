@@ -5,7 +5,6 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
@@ -246,6 +245,9 @@ class BoatSimNode(Node):
         )
         return roll, pitch, yaw
 
+    @staticmethod
+    def wrap_to_pi(angle: float) -> float:
+        return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
     def cmd_callback(self, msg):
         self.thrust_cmd = float(msg.thrust)
@@ -357,7 +359,7 @@ class BoatSimNode(Node):
         roll, pitch, yaw = self.rpy_from_quaternion_wxyz([qw, qx, qy, qz])
         state_debug.roll = float(roll)
         state_debug.pitch = float(pitch)
-        state_debug.yaw = float(yaw)
+        state_debug.yaw = float(self.wrap_to_pi(yaw))
 
         state_debug.u = float(u)
         state_debug.v = float(v)
@@ -436,8 +438,8 @@ class BoatSimNode(Node):
             state_debug.restoring_m = float(g_vec[4])
             state_debug.restoring_n = float(g_vec[5])
         else:
-            x_dot = u * math.cos(psi) + v * math.sin(psi)
-            y_dot = -u * math.sin(psi) + v * math.cos(psi)
+            x_dot = u * math.cos(psi) - v * math.sin(psi)
+            y_dot = u * math.sin(psi) + v * math.cos(psi)
             state_debug.x_dot = float(x_dot)
             state_debug.y_dot = float(y_dot)
             state_debug.z_dot = 0.0

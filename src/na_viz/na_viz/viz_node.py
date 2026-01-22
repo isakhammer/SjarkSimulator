@@ -21,7 +21,7 @@ class BoatVisualizer(Node):
         self.declare_parameter("map_frame", "map")
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("frenet_frame", "path_frenet")
-        self.declare_parameter("flip_tf_yaw", True)
+        self.declare_parameter("flip_tf_yaw", False)
         self.declare_parameter("debug_force_scale", 0.01)
         self.declare_parameter("debug_moment_scale", 0.02)
         self.declare_parameter("debug_thrust_scale", 0.01)
