@@ -7,6 +7,7 @@ import rclpy
 from rclpy.node import Node
 from ament_index_python.packages import get_package_share_directory
 
+from na_controller.los import desired_heading_ned, path_yaw_from_tangent, wrap_to_pi
 from na_utils.bspline import (
     BSplinePath,
     ProjectionTracker,
@@ -119,9 +120,6 @@ class ControllerNode(Node):
         )
         self.projection_tracker.reset()
 
-    def wrap_to_pi(self, angle: float) -> float:
-        return (angle + math.pi) % (2.0 * math.pi) - math.pi
-
     def control_loop(self) -> None:
         x, y, psi, u, v, r = self.state
         now = self.get_clock().now()
@@ -170,20 +168,14 @@ class ControllerNode(Node):
         nx, ny = proj_sample.normal
         cte = (x - proj_x) * nx + (y - proj_y) * ny
         tx, ty = proj_sample.tangent
-        if abs(tx) < 1e-6 and abs(ty) < 1e-6:
-            proj_yaw = 0.0
-        else:
-            # Convert geometric tangent (CCW-positive) to NED yaw (clockwise-positive).
-            proj_yaw = -math.atan2(ty, tx)
+        proj_yaw = path_yaw_from_tangent(tx, ty)
 
         target_t = self.spline.advance_t(proj_t, lookahead)
         target_sample = self.spline.sample_at_t(target_t)
         target_x, target_y = target_sample.point
 
-        desired_heading = self.wrap_to_pi(
-            proj_yaw + math.atan2(cte, lookahead)
-        )
-        heading_error = self.wrap_to_pi(desired_heading - psi)
+        desired_heading = desired_heading_ned(proj_yaw, cte, lookahead)
+        heading_error = wrap_to_pi(desired_heading - psi)
 
         base_thrust = float(params["base_thrust"])
         heading_kp = float(params["heading_kp"])
@@ -192,7 +184,7 @@ class ControllerNode(Node):
         max_delta = float(params["max_delta"])
 
         thrust = max(-max_thrust, min(max_thrust, base_thrust))
-        delta = -heading_kp * heading_error - heading_kd * r
+        delta = -heading_kp * heading_error + heading_kd * r
         delta = max(-max_delta, min(max_delta, delta))
 
         state_msg = ControllerState()

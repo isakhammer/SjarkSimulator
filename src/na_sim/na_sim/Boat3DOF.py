@@ -84,8 +84,8 @@ class Boat3DOF:
         x, y, psi, u, v, r = state
 
         # Kinematics
-        dx = u * np.cos(psi) + v * np.sin(psi)
-        dy = -u * np.sin(psi) + v * np.cos(psi)
+        dx = u * np.cos(psi) - v * np.sin(psi)
+        dy = u * np.sin(psi) + v * np.cos(psi)
         dpsi = r
 
         # Input to generalized forces
