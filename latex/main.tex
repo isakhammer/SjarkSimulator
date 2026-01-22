@@ -83,35 +83,67 @@ The stack is a minimal closed loop:
 This section is the single source of truth for frames, symbols, and sign
 conventions used throughout the document.
 
-\subsection{Frames and axes}
+\subsection{NED convention (world frame)}
+\label{sec:ned_convention}
+\paragraph{Purpose.}
+Fix a single world-frame orientation so position, heading, and gravity signs are
+consistent across models, plots, and code.
+
+\paragraph{Assumptions.}
+The world frame is locally tangent to Earth and treated as inertial over the
+trajectory of interest; curvature and Coriolis effects are neglected.
+
+\paragraph{Definitions.}
+The inertial world frame $\{W\}$ follows the NED convention with basis vectors
+$\{\mathbf{e}_N,\mathbf{e}_E,\mathbf{e}_D\}$:
+$+x_W$ points North, $+y_W$ points East, and $+z_W$ points Down. A position
+vector in $\{W\}$ is $\mathbf{r}^W=[x,y,z]^\top$, where $z>0$ means below the
+origin. All rotations follow the right-hand rule. The yaw angle $\psi$ is the
+right-hand rotation about $+z_W$, so positive yaw rotates $+x_W$ toward $+y_W$
+(clockwise when viewed from above).
+
+\paragraph{Model statement.}
+In planar motion, the NED yaw convention implies the horizontal heading
+direction
+\[
+  \hat{\mathbf{h}}^W =
+  \begin{bmatrix}
+    \cos\psi \\ \sin\psi \\ 0
+  \end{bmatrix},
+\]
+so a positive $\psi$ rotates the North axis toward East in the horizontal plane.
+
+\paragraph{Implementation mapping.}
+State estimates, logged trajectories, and planner inputs store $x,y,z$ in NED.
+The kinematic updates in the simulator and tests (e.g.,
+\texttt{src/na\_sim/test/test\_ned\_conventions.py}) interpret $\psi$ using the
+clockwise NED convention and use $\psi$ to map body-frame velocities into the
+world frame consistent with the heading direction above.
+
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}[>=Latex,scale=1.0,every node/.style={font=\scriptsize}]
+    \coordinate (O) at (0,0);
+    \draw[->,thick] (O) -- (0,2.0) node[anchor=south] {$+x_W$ (North)};
+    \draw[->,thick] (O) -- (2.2,0) node[anchor=west] {$+y_W$ (East)};
+    \draw[->,thick] (O) -- (-1.2,-1.2) node[anchor=north east] {$+z_W$ (Down)};
+    \draw[->,gray] (0,1.4) arc[start angle=90,end angle=0,radius=1.4];
+    \node[gray] at (0.9,0.9) {$\psi>0$ (CW)};
+    \node[anchor=north east] at (-0.1,0.1) {$\{W\}$};
+  \end{tikzpicture}
+  \caption{NED world frame $\{W\}$: north-east-down axes and positive yaw about $+z_W$.}
+  \label{fig:ned_axes}
+\end{figure}
+
+\subsection{Body frame (FRD)}
 The simulator uses a world frame $\{W\}$ and a body frame $\{B\}$, corresponding
-to ROS~2 \texttt{map} and \texttt{base\_link}, respectively.
-\begin{itemize}
-  \item $\{W\}$ is inertial and right-handed; $+z_W$ points downward (NED).
-  \item $\{B\}$ is body-fixed and right-handed; $+x_B$ points forward, $+y_B$
-    points to starboard (right), and $+z_B$ points downward (FRD).
-\end{itemize}
-All angles follow the right-hand rule. The yaw angle $\psi$ is a rotation about
-$+z_W$; positive yaw is clockwise (right turn) when viewed from above.
+to ROS~2 \texttt{map} and \texttt{base\_link}, respectively. The body frame is
+right-handed with $+x_B$ forward, $+y_B$ to starboard (right), and $+z_B$
+downward (FRD). This aligns the body axes with the NED convention in
+\Cref{sec:ned_convention}.
 
 \paragraph{Marine-convention note.}
-This document follows the Fossen NED/FRD convention. ROS~2 visualization tools
-often assume ENU/FLU frames; when comparing formulas or plotting in ROS, the
-following constant transforms are useful:
-\[
-  \mathbf{T}_{\mathrm{ENU}\leftarrow\mathrm{NED}} =
-  \begin{bmatrix}
-    0 & 1 & 0 \\
-    1 & 0 & 0 \\
-    0 & 0 & -1
-  \end{bmatrix}, \qquad
-  \mathbf{T}_{\mathrm{FLU}\leftarrow\mathrm{FRD}} =
-  \begin{bmatrix}
-    1 & 0 & 0 \\
-    0 & -1 & 0 \\
-    0 & 0 & -1
-  \end{bmatrix}.
-\]
+This document and the codebase use the Fossen NED/FRD convention throughout.
 
 \subsection{State, inputs, and generalized forces}
 We split vessel pose and velocity using standard marine craft notation:
@@ -326,17 +358,15 @@ the boat position $(x,y)$ onto the spline. Projection is a two-stage process:
   \]
 \end{enumerate}
 The result provides a Frenet frame with unit tangent $\hat{\mathbf{t}}$,
-unit normal $\hat{\mathbf{n}} = (-\hat{t}_y,\hat{t}_x)$ (left normal), and signed
+unit normal $\hat{\mathbf{n}} = (-\hat{t}_y,\hat{t}_x)$ (right normal), and signed
 cross-track error
 \[
   cte = (\mathbf{p}-\mathbf{p}_{proj}) \cdot \hat{\mathbf{n}}.
 \]
-With this convention, $cte > 0$ means the boat is to the left of the path
+With this convention, $cte > 0$ means the boat is to the right of the path
 tangent direction.
-These geometric utilities in \texttt{na\_utils} are defined in the abstract
-math frame where headings are measured counterclockwise from $+x$; the controller
-and simulator convert to the NED/FRD robotic convention (clockwise yaw) when
-computing $\psi_{path}$.
+These geometric utilities in \texttt{na\_utils} use the NED/FRD convention
+directly when computing $\psi_{path}$.
 
 \subsection{\texttt{ProjectionTracker}}
 \texttt{ProjectionTracker} adds state to stabilize sequential projections:
@@ -356,22 +386,22 @@ The controller follows a line-of-sight (LOS) guidance pattern:
   \item If no valid spline is available, publish $[0,0]$ and exit.
   \item Project $(x,y)$ onto the path to get $t$, tangent, normal, and $cte$.
   \item Compute the path heading $\psi_{path}$ from the tangent; under NED this
-    uses $\psi_{path} = -\arctan2(t_y, t_x)$, and if the tangent norm is near
+    uses $\psi_{path} = \arctan2(t_y, t_x)$, and if the tangent norm is near
     zero, $\psi_{path}=0$.
   \item Choose a lookahead distance $L$ and advance to $t_{target}=t+L$.
   \item Compute desired heading
     \[
-      \psi_d = \mathrm{wrap}\left(\psi_{path} + \arctan2(cte, L)\right).
+      \psi_d = \mathrm{wrap}\left(\psi_{path} - \arctan2(cte, L)\right).
     \]
   \item Apply a PD law on heading error with saturation:
     \[
-      \delta = \mathrm{sat}\left(-k_p\,\mathrm{wrap}(\psi_d-\psi) - k_d\,r,\;\delta_{\max}\right).
+      \delta = \mathrm{sat}\left(-k_p\,\mathrm{wrap}(\psi_d-\psi) + k_d\,r,\;\delta_{\max}\right).
     \]
   \item Thrust is constant: $T=\mathrm{sat}(T_0, T_{\max})$.
 \end{enumerate}
 The steering sign is consistent with the simulator's moment convention: positive
-$\delta$ produces a negative yaw moment, so the controller uses a leading minus
-sign in the PD law.
+$\delta$ produces a negative yaw moment, so the proportional term uses a leading
+minus sign, while the damping term uses $+k_d r$ to oppose yaw-rate excursions.
 
 \subsection{Configuration parameters}
 Default parameters live in \texttt{src/na\_launch/config/sim\_controller\_params.yaml}.
@@ -557,8 +587,8 @@ $\boldsymbol{\nu}_3=[u,v,r]^\top$. The kinematics are:
 \]
 which expands to:
 \begin{align}
-  \dot{x} &= u\cos\psi + v\sin\psi, \\
-  \dot{y} &= -u\sin\psi + v\cos\psi, \\
+  \dot{x} &= u\cos\psi - v\sin\psi, \\
+  \dot{y} &= u\sin\psi + v\cos\psi, \\
   \dot{\psi} &= r.
 \end{align}
 
@@ -977,11 +1007,17 @@ The path utilities and controller have explicit regression tests that encode the
 sign conventions used by the closed loop:
 \begin{itemize}
   \item \texttt{src/na\_utils/tests/test\_bspline.py} validates the B-spline Frenet
-    frame, including the left-normal $cte$ sign on a closed circle.
+    frame, including the right-normal $cte$ sign on a closed circle.
   \item \texttt{src/na\_launch/test/test\_path\_following\_3dof\_launch.py} and
     \texttt{src/na\_launch/test/test\_path\_following\_6dof\_launch.py} launch the
     controller and simulator and assert that the yaw-rate sign matches the local
     path direction derived from the spline tangent.
+  \item \texttt{src/na\_sim/test/test\_ned\_conventions.py} validates NED kinematics
+    in the 3~DOF model and the quaternion yaw rotation mapping.
+  \item \texttt{src/na\_utils/tests/test\_ned\_projection.py} checks that projection
+    prediction uses NED body-to-world velocity.
+  \item \texttt{src/na\_controller/test/test\_los\_ned.py} validates LOS heading
+    math under NED/FRD conventions.
 \end{itemize}
 These tests are written against the Fossen NED/FRD convention (world $z$ down,
 body $+y$ starboard, yaw positive clockwise). When changing sign conventions or
