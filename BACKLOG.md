@@ -6,7 +6,7 @@ Priorities and work items for the simulation + control stack.
 
 Goal: replace the current sim with a monohull 3-DOF model and a single stern rotor/propulsor that can steer over a 180° sweep (assume -90°..+90° about the hull x-axis).
 
-- Define the 3-DOF state, frames, and sign conventions (NED/ENU, body axes, yaw sign).
+- Define the 3-DOF state, frames, and sign conventions (NED/FRD, yaw sign).
 - Define actuator interface: thrust magnitude and rotor angle (plus optional rate limits / dynamics).
 - Implement the model and actuator in `src/na_sim/na_sim`.
 - Keep topic compatibility where possible (or provide a compatibility node).
@@ -64,7 +64,7 @@ Acceptance checks
 
 ## Notes / Decisions Needed
 
-- Rotor angle convention: 0° = forward along +x, + = port/CCW? (pick and document).
+- Rotor angle convention: 0° = forward along +x, + = starboard/right (pick and document).
 - Actuator command representation: absolute rotor angle vs relative to hull heading.
 - Whether to keep `/cmd_thrust` as the primary command topic long-term or migrate to a dedicated message.
 - Add derived/world-frame force and moment fields to `na_msg/BoatState`.

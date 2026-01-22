@@ -60,7 +60,7 @@ Steps
 - [pending] Add/extend launch smoke test that confirms sim + planner + controller run and motion occurs.
 
 Notes
-- Confirm angle convention for the stern rotor (0 = forward, + = port/CCW?) and document it.
+- Confirm angle convention for the stern rotor (0 = forward, + = starboard/right) and document it.
 - Decide if the rotor command is absolute angle or relative to hull heading.
 
 Decisions
