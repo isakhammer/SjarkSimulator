@@ -80,8 +80,8 @@ def _path_yaw_sign(path, proj_x, proj_y):
     t1 = path.advance_t(t0, step)
     s0 = path.sample_at_t(t0)
     s1 = path.sample_at_t(t1)
-    yaw0 = -math.atan2(s0.tangent[1], s0.tangent[0])
-    yaw1 = -math.atan2(s1.tangent[1], s1.tangent[0])
+    yaw0 = math.atan2(s0.tangent[1], s0.tangent[0])
+    yaw1 = math.atan2(s1.tangent[1], s1.tangent[0])
     dyaw = (yaw1 - yaw0 + math.pi) % (2.0 * math.pi) - math.pi
     if abs(dyaw) < 1e-6:
         return 0
@@ -225,8 +225,8 @@ class TestPathFollowing6DofLaunch(unittest.TestCase):
             expected_sign,
             "Yaw rate sign is inconsistent with circular path direction",
         )
-        self.assertGreater(
+        self.assertLess(
             boat_state.r * boat_state.delta,
             0.0,
-            "Yaw rate sign should match steering angle under ENU/FLU convention",
+            "Yaw rate sign should oppose steering angle under NED/FRD convention",
         )
