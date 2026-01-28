@@ -5,7 +5,6 @@ WORKDIR /workspace
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-      make \
       python3 \
       python3-numpy \
       latexmk \
@@ -17,4 +16,4 @@ RUN apt-get update \
       texlive-science \
     && rm -rf /var/lib/apt/lists/*
 
-CMD ["make", "-C", "latex", "pdf-with-figures"]
+CMD ["bash", "-lc", "/workspace/latex/build_overview.sh"]
