@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
                 'viz_node = na_viz.viz_node:main',
+                'tf_node = na_viz.tf_node:main',
         ],
     },
 )

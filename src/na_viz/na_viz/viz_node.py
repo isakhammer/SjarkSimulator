@@ -1,3 +1,5 @@
+import math
+
 import rclpy
 from rclpy.node import Node
 
@@ -5,9 +7,8 @@ from nav_msgs.msg import Odometry, Path
 
 from na_utils.bspline import eval_bspline, samples_from_density
 from na_msg.msg import BsplinePath, ControllerState
-from geometry_msgs.msg import PoseStamped, Point, TransformStamped
+from geometry_msgs.msg import Pose, PoseStamped, Point
 from visualization_msgs.msg import Marker, MarkerArray
-from tf2_ros import TransformBroadcaster
 
 import numpy as np
 
@@ -22,10 +23,22 @@ class BoatVisualizer(Node):
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("frenet_frame", "path_frenet")
         self.declare_parameter("flip_tf_yaw", False)
+        self.declare_parameter("convert_legacy_ned_to_enu", False)
+        self.declare_parameter("use_urdf", False)
+        self.declare_parameter("urdf_path", "/root/code/src/na_launch/urdf/boat.urdf")
+        self.declare_parameter("show_z_plus_marker", False)
+        self.declare_parameter("z_plus_marker_offset", 0.4)
+        self.declare_parameter("z_plus_marker_scale", 0.12)
         self.declare_parameter("debug_force_scale", 0.01)
         self.declare_parameter("debug_moment_scale", 0.02)
         self.declare_parameter("debug_thrust_scale", 0.01)
         self.declare_parameter("debug_velocity_scale", 1.0)
+        self.declare_parameter("debug_marker_z_offset", 0.0)
+        self.declare_parameter("show_rotor_marker", True)
+        self.declare_parameter("rotor_marker_length", 0.6)
+        self.declare_parameter("rotor_offset_x", -0.6)
+        self.declare_parameter("rotor_offset_y", 0.0)
+        self.declare_parameter("rotor_offset_z", 0.0)
         self.declare_parameter("debug_marker_alpha", 0.9)
         self.declare_parameter("debug_marker_shaft_diameter", 0.04)
         self.declare_parameter("debug_marker_head_diameter", 0.08)
@@ -34,6 +47,16 @@ class BoatVisualizer(Node):
         self.base_frame = str(self.get_parameter("base_frame").value)
         self.frenet_frame = str(self.get_parameter("frenet_frame").value)
         self.flip_tf_yaw = bool(self.get_parameter("flip_tf_yaw").value)
+        self.convert_legacy_ned_to_enu = bool(
+            self.get_parameter("convert_legacy_ned_to_enu").value
+        )
+        self.use_urdf = bool(self.get_parameter("use_urdf").value)
+        self.urdf_path = str(self.get_parameter("urdf_path").value)
+        self.show_z_plus_marker = bool(self.get_parameter("show_z_plus_marker").value)
+        self._q_enu_from_legacy_ned = np.array(
+            [0.0, 1.0 / math.sqrt(2.0), 1.0 / math.sqrt(2.0), 0.0],
+            dtype=float,
+        )
 
         # Subscriptions
         self.sub_odom = self.create_subscription(
@@ -55,12 +78,9 @@ class BoatVisualizer(Node):
             MarkerArray, "/viz/debug_markers", 10
         )
 
-        # TF broadcaster for projection frame
-        self.tf_broadcaster = TransformBroadcaster(self)
-
         # Internal path storage
         self.path_trace = Path()
-        self.path_trace.header.frame_id = "map"
+        self.path_trace.header.frame_id = self.map_frame
         self.last_pose = None
 
         self.get_logger().info("BoatVisualizer started")
@@ -88,6 +108,60 @@ class BoatVisualizer(Node):
             ],
             dtype=float,
         )
+
+    @staticmethod
+    def quaternion_multiply_wxyz(lhs_wxyz, rhs_wxyz):
+        lw, lx, ly, lz = lhs_wxyz
+        rw, rx, ry, rz = rhs_wxyz
+        return np.array(
+            [
+                lw * rw - lx * rx - ly * ry - lz * rz,
+                lw * rx + lx * rw + ly * rz - lz * ry,
+                lw * ry - lx * rz + ly * rw + lz * rx,
+                lw * rz + lx * ry - ly * rx + lz * rw,
+            ],
+            dtype=float,
+        )
+
+    @staticmethod
+    def normalize_quaternion_wxyz(quaternion_wxyz):
+        q = np.asarray(quaternion_wxyz, dtype=float).reshape(4,)
+        norm = float(np.linalg.norm(q))
+        if norm <= 0.0:
+            return np.array([1.0, 0.0, 0.0, 0.0], dtype=float)
+        return q / norm
+
+    def _legacy_ned_to_enu_vec(self, vec_xyz):
+        v = np.asarray(vec_xyz, dtype=float).reshape(3,)
+        return np.array([v[1], v[0], -v[2]], dtype=float)
+
+    def _convert_quaternion_legacy_ned_to_enu(self, quat_wxyz):
+        q = self.quaternion_multiply_wxyz(self._q_enu_from_legacy_ned, quat_wxyz)
+        return self.normalize_quaternion_wxyz(q)
+
+    def _convert_pose_legacy_ned_to_enu(self, pose):
+        pos = self._legacy_ned_to_enu_vec(
+            [pose.position.x, pose.position.y, pose.position.z]
+        )
+        q_wxyz = np.array(
+            [
+                pose.orientation.w,
+                pose.orientation.x,
+                pose.orientation.y,
+                pose.orientation.z,
+            ],
+            dtype=float,
+        )
+        q_enu = self._convert_quaternion_legacy_ned_to_enu(q_wxyz)
+        pose_enu = Pose()
+        pose_enu.position.x = float(pos[0])
+        pose_enu.position.y = float(pos[1])
+        pose_enu.position.z = float(pos[2])
+        pose_enu.orientation.w = float(q_enu[0])
+        pose_enu.orientation.x = float(q_enu[1])
+        pose_enu.orientation.y = float(q_enu[2])
+        pose_enu.orientation.z = float(q_enu[3])
+        return pose_enu
 
     def _make_sphere_marker(self, ns, marker_id, position_xyz, color_rgb, scale, stamp):
         marker = Marker()
@@ -161,7 +235,7 @@ class BoatVisualizer(Node):
         du = (u_end - u_start) / (samples - 1)
 
         marker = Marker()
-        marker.header.frame_id = "map"
+        marker.header.frame_id = self.map_frame
         marker.header.stamp = self.get_clock().now().to_msg()
 
         marker.ns = "path_viz"
@@ -180,6 +254,8 @@ class BoatVisualizer(Node):
             p = Point()
             u = u_start + du * i
             x, y = eval_bspline(control, u)
+            if self.convert_legacy_ned_to_enu:
+                x, y, _ = self._legacy_ned_to_enu_vec([x, y, 0.0])
             p.x = x
             p.y = y
             p.z = 0.0
@@ -190,39 +266,34 @@ class BoatVisualizer(Node):
     # --------------------------------------------------------
     # PATH TRACE
     # --------------------------------------------------------
-    def update_path_trace(self, msg):
-        pose = PoseStamped()
-        pose.header = msg.header
-        pose.pose = msg.pose.pose
+    def update_path_trace(self, stamp, pose):
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = stamp
+        pose_msg.header.frame_id = self.map_frame
+        pose_msg.pose = pose
 
-        self.path_trace.header.stamp = msg.header.stamp
-        self.path_trace.poses.append(pose)
+        self.path_trace.header.stamp = stamp
+        self.path_trace.header.frame_id = self.map_frame
+        self.path_trace.poses.append(pose_msg)
         self.pub_path_trace.publish(self.path_trace)
 
     # --------------------------------------------------------
     # MAIN CALLBACK
     # --------------------------------------------------------
     def odom_cb(self, msg):
-        self.last_pose = msg.pose.pose
-        t = TransformStamped()
-        t.header = msg.header
-        t.header.frame_id = self.map_frame
-        t.child_frame_id = self.base_frame
-        t.transform.translation.x = msg.pose.pose.position.x
-        t.transform.translation.y = msg.pose.pose.position.y
-        t.transform.translation.z = msg.pose.pose.position.z
-        t.transform.rotation = msg.pose.pose.orientation
-        self.tf_broadcaster.sendTransform(t)
-        self.update_path_trace(msg)
-        self.publish_boat_marker(msg)
+        pose = msg.pose.pose
+        if self.convert_legacy_ned_to_enu:
+            pose = self._convert_pose_legacy_ned_to_enu(pose)
+        self.last_pose = pose
+        self.update_path_trace(msg.header.stamp, pose)
+        self.publish_boat_marker(msg.header.stamp, pose)
 
     def controller_state_cb(self, msg):
-        self.publish_frenet_from_state(msg)
         if self.last_pose is None:
             return
 
         target = Marker()
-        target.header.frame_id = "map"
+        target.header.frame_id = self.map_frame
         target.header.stamp = self.get_clock().now().to_msg()
         target.ns = "los_target"
         target.id = 0
@@ -235,14 +306,18 @@ class BoatVisualizer(Node):
         target.color.g = 0.8
         target.color.b = 0.0
         target.color.a = 1.0
-        target.pose.position.x = msg.target_x
-        target.pose.position.y = msg.target_y
+        target_x = msg.target_x
+        target_y = msg.target_y
+        if self.convert_legacy_ned_to_enu:
+            target_x, target_y, _ = self._legacy_ned_to_enu_vec([target_x, target_y, 0.0])
+        target.pose.position.x = float(target_x)
+        target.pose.position.y = float(target_y)
         target.pose.position.z = 0.0
         target.pose.orientation.w = 1.0
         self.pub_los_target.publish(target)
 
         m = Marker()
-        m.header.frame_id = "map"
+        m.header.frame_id = self.map_frame
         m.header.stamp = self.get_clock().now().to_msg()
         m.ns = "cte"
         m.id = 0
@@ -260,8 +335,12 @@ class BoatVisualizer(Node):
         p0.z = 0.0
 
         p1 = Point()
-        p1.x = msg.proj_x
-        p1.y = msg.proj_y
+        proj_x = msg.proj_x
+        proj_y = msg.proj_y
+        if self.convert_legacy_ned_to_enu:
+            proj_x, proj_y, _ = self._legacy_ned_to_enu_vec([proj_x, proj_y, 0.0])
+        p1.x = float(proj_x)
+        p1.y = float(proj_y)
         p1.z = 0.0
 
         m.points.append(p0)
@@ -282,32 +361,29 @@ class BoatVisualizer(Node):
         r_b = np.array([msg.r_b_x, msg.r_b_y, msg.r_b_z], dtype=float)
         com_world = position + r_bw @ r_g
         cob_world = position + r_bw @ r_b
+        rotor_offset_body = np.array(
+            [
+                float(self.get_parameter("rotor_offset_x").value),
+                float(self.get_parameter("rotor_offset_y").value),
+                float(self.get_parameter("rotor_offset_z").value),
+            ],
+            dtype=float,
+        )
+        rotor_pos_world = position + r_bw @ rotor_offset_body
+        rotor_dir_body = np.array(
+            [math.cos(msg.delta), math.sin(msg.delta), 0.0], dtype=float
+        )
+        rotor_dir_world = r_bw @ rotor_dir_body
 
         force_scale = float(self.get_parameter("debug_force_scale").value)
         thrust_scale = float(self.get_parameter("debug_thrust_scale").value)
         moment_scale = float(self.get_parameter("debug_moment_scale").value)
         velocity_scale = float(self.get_parameter("debug_velocity_scale").value)
-
-        markers = []
-        markers.append(
-            self._make_sphere_marker("com", 0, com_world, (0.95, 0.85, 0.2), 0.2, stamp)
-        )
-        markers.append(
-            self._make_sphere_marker("cob", 0, cob_world, (0.2, 0.8, 0.95), 0.2, stamp)
-        )
+        debug_marker_z_offset = float(self.get_parameter("debug_marker_z_offset").value)
+        rotor_length = float(self.get_parameter("rotor_marker_length").value)
 
         gravity_world = np.array([0.0, 0.0, -msg.weight_n], dtype=float)
         buoyancy_world = np.array([0.0, 0.0, msg.buoyancy_n], dtype=float)
-        markers.append(
-            self._make_arrow_marker(
-                "gravity", 0, com_world, gravity_world, (0.9, 0.2, 0.2), force_scale, stamp
-            )
-        )
-        markers.append(
-            self._make_arrow_marker(
-                "buoyancy", 0, cob_world, buoyancy_world, (0.2, 0.9, 0.3), force_scale, stamp
-            )
-        )
 
         tau_force_body = np.array([msg.tau_x, msg.tau_y, msg.tau_z], dtype=float)
         tau_moment_body = np.array([msg.tau_k, msg.tau_m, msg.tau_n], dtype=float)
@@ -343,11 +419,69 @@ class BoatVisualizer(Node):
         restoring_world = r_bw @ restoring_body
         restoring_moment_world = r_bw @ restoring_moment_body
 
+        if self.convert_legacy_ned_to_enu:
+            position = self._legacy_ned_to_enu_vec(position)
+            com_world = self._legacy_ned_to_enu_vec(com_world)
+            cob_world = self._legacy_ned_to_enu_vec(cob_world)
+            rotor_pos_world = self._legacy_ned_to_enu_vec(rotor_pos_world)
+            gravity_world = self._legacy_ned_to_enu_vec(gravity_world)
+            buoyancy_world = self._legacy_ned_to_enu_vec(buoyancy_world)
+            tau_force_world = self._legacy_ned_to_enu_vec(tau_force_world)
+            tau_moment_world = self._legacy_ned_to_enu_vec(tau_moment_world)
+            damping_world = self._legacy_ned_to_enu_vec(damping_world)
+            damping_moment_world = self._legacy_ned_to_enu_vec(damping_moment_world)
+            coriolis_rb_world = self._legacy_ned_to_enu_vec(coriolis_rb_world)
+            coriolis_rb_moment_world = self._legacy_ned_to_enu_vec(coriolis_rb_moment_world)
+            coriolis_a_world = self._legacy_ned_to_enu_vec(coriolis_a_world)
+            coriolis_a_moment_world = self._legacy_ned_to_enu_vec(coriolis_a_moment_world)
+            restoring_world = self._legacy_ned_to_enu_vec(restoring_world)
+            restoring_moment_world = self._legacy_ned_to_enu_vec(restoring_moment_world)
+
+        debug_offset = np.array([0.0, 0.0, debug_marker_z_offset], dtype=float)
+        position_dbg = position + debug_offset
+        com_world_dbg = com_world + debug_offset
+        cob_world_dbg = cob_world + debug_offset
+        rotor_pos_dbg = rotor_pos_world + debug_offset
+
+        markers = []
+        markers.append(
+            self._make_sphere_marker(
+                "com", 0, com_world_dbg, (0.95, 0.85, 0.2), 0.2, stamp
+            )
+        )
+        markers.append(
+            self._make_sphere_marker(
+                "cob", 0, cob_world_dbg, (0.2, 0.8, 0.95), 0.2, stamp
+            )
+        )
+        markers.append(
+            self._make_arrow_marker(
+                "gravity",
+                0,
+                com_world_dbg,
+                gravity_world,
+                (0.9, 0.2, 0.2),
+                force_scale,
+                stamp,
+            )
+        )
+        markers.append(
+            self._make_arrow_marker(
+                "buoyancy",
+                0,
+                cob_world_dbg,
+                buoyancy_world,
+                (0.2, 0.9, 0.3),
+                force_scale,
+                stamp,
+            )
+        )
+
         markers.append(
             self._make_arrow_marker(
                 "tau_force",
                 0,
-                position,
+                position_dbg,
                 tau_force_world,
                 (1.0, 0.5, 0.0),
                 force_scale,
@@ -363,22 +497,38 @@ class BoatVisualizer(Node):
             dtype=float,
         )
         thrust_world = r_bw @ thrust_body
+        if self.convert_legacy_ned_to_enu:
+            thrust_world = self._legacy_ned_to_enu_vec(thrust_world)
         markers.append(
             self._make_arrow_marker(
                 "thrust",
                 0,
-                position,
+                position_dbg,
                 thrust_world,
                 (1.0, 0.2, 0.2),
                 thrust_scale,
                 stamp,
             )
         )
+        if bool(self.get_parameter("show_rotor_marker").value):
+            if self.convert_legacy_ned_to_enu:
+                rotor_dir_world = self._legacy_ned_to_enu_vec(rotor_dir_world)
+            markers.append(
+                self._make_arrow_marker(
+                    "rotor",
+                    0,
+                    rotor_pos_dbg,
+                    rotor_dir_world,
+                    (1.0, 0.6, 0.0),
+                    rotor_length,
+                    stamp,
+                )
+            )
         markers.append(
             self._make_arrow_marker(
                 "tau_moment",
                 0,
-                position,
+                position_dbg,
                 tau_moment_world,
                 (1.0, 0.3, 0.0),
                 moment_scale,
@@ -389,7 +539,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "damping_force",
                 0,
-                position,
+                position_dbg,
                 damping_world,
                 (0.6, 0.6, 0.6),
                 force_scale,
@@ -400,7 +550,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "damping_moment",
                 0,
-                position,
+                position_dbg,
                 damping_moment_world,
                 (0.5, 0.5, 0.5),
                 moment_scale,
@@ -411,7 +561,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "coriolis_rb_force",
                 0,
-                position,
+                position_dbg,
                 coriolis_rb_world,
                 (0.7, 0.2, 0.9),
                 force_scale,
@@ -422,7 +572,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "coriolis_rb_moment",
                 0,
-                position,
+                position_dbg,
                 coriolis_rb_moment_world,
                 (0.6, 0.2, 0.8),
                 moment_scale,
@@ -433,7 +583,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "coriolis_a_force",
                 0,
-                position,
+                position_dbg,
                 coriolis_a_world,
                 (0.2, 0.6, 0.9),
                 force_scale,
@@ -444,7 +594,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "coriolis_a_moment",
                 0,
-                position,
+                position_dbg,
                 coriolis_a_moment_world,
                 (0.2, 0.5, 0.8),
                 moment_scale,
@@ -455,7 +605,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "restoring_force",
                 0,
-                position,
+                position_dbg,
                 restoring_world,
                 (0.1, 0.9, 0.4),
                 force_scale,
@@ -466,7 +616,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "restoring_moment",
                 0,
-                position,
+                position_dbg,
                 restoring_moment_world,
                 (0.1, 0.7, 0.3),
                 moment_scale,
@@ -478,11 +628,14 @@ class BoatVisualizer(Node):
         omega_body = np.array([msg.p, msg.q, msg.r], dtype=float)
         vel_world = r_bw @ vel_body
         omega_world = r_bw @ omega_body
+        if self.convert_legacy_ned_to_enu:
+            vel_world = self._legacy_ned_to_enu_vec(vel_world)
+            omega_world = self._legacy_ned_to_enu_vec(omega_world)
         markers.append(
             self._make_arrow_marker(
                 "velocity",
                 0,
-                position,
+                position_dbg,
                 vel_world,
                 (0.2, 0.9, 0.9),
                 velocity_scale,
@@ -493,7 +646,7 @@ class BoatVisualizer(Node):
             self._make_arrow_marker(
                 "omega",
                 0,
-                position,
+                position_dbg,
                 omega_world,
                 (0.9, 0.2, 0.9),
                 velocity_scale,
@@ -505,35 +658,20 @@ class BoatVisualizer(Node):
         marker_array.markers = markers
         self.pub_debug_markers.publish(marker_array)
 
-    def publish_frenet_from_state(self, msg):
-        yaw = float(msg.proj_yaw)
-        if self.flip_tf_yaw:
-            yaw = -yaw
-        qz = float(np.sin(yaw / 2.0))
-        qw = float(np.cos(yaw / 2.0))
-
-        t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = self.map_frame
-        t.child_frame_id = self.frenet_frame
-        t.transform.translation.x = float(msg.proj_x)
-        t.transform.translation.y = float(msg.proj_y)
-        t.transform.translation.z = 0.0
-        t.transform.rotation.z = qz
-        t.transform.rotation.w = qw
-        self.tf_broadcaster.sendTransform(t)
-
     # --------------------------------------------------------
     # BOAT MARKER (cube hull)
     # --------------------------------------------------------
-    def publish_boat_marker(self, msg):
-        x = msg.pose.pose.position.x
-        y = msg.pose.pose.position.y
-        q = msg.pose.pose.orientation
+    def publish_boat_marker(self, stamp, pose):
+        if self.use_urdf:
+            self.publish_z_plus_marker(stamp, pose)
+            return
+        x = pose.position.x
+        y = pose.position.y
+        q = pose.orientation
 
         m = Marker()
-        m.header.frame_id = "map"
-        m.header.stamp = msg.header.stamp
+        m.header.frame_id = self.map_frame
+        m.header.stamp = stamp
         m.ns = "boat"
         m.id = 0
         m.type = Marker.CUBE
@@ -553,6 +691,34 @@ class BoatVisualizer(Node):
         m.pose.position.y = y
         m.pose.position.z = 0.1
         m.pose.orientation = q
+
+        self.pub_boat.publish(m)
+        self.publish_z_plus_marker(stamp, pose)
+
+    def publish_z_plus_marker(self, stamp, pose):
+        if not self.show_z_plus_marker:
+            return
+        offset = float(self.get_parameter("z_plus_marker_offset").value)
+        scale = float(self.get_parameter("z_plus_marker_scale").value)
+
+        m = Marker()
+        m.header.frame_id = self.map_frame
+        m.header.stamp = stamp
+        m.ns = "z_plus"
+        m.id = 0
+        m.type = Marker.SPHERE
+        m.action = Marker.ADD
+        m.scale.x = scale
+        m.scale.y = scale
+        m.scale.z = scale
+        m.color.r = 1.0
+        m.color.g = 0.2
+        m.color.b = 0.6
+        m.color.a = 1.0
+        m.pose.orientation.w = 1.0
+        m.pose.position.x = pose.position.x
+        m.pose.position.y = pose.position.y
+        m.pose.position.z = float(pose.position.z + offset)
 
         self.pub_boat.publish(m)
 
