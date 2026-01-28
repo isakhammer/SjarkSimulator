@@ -15,6 +15,7 @@ alias clean_ws='cd /root/code/ && rm -rf build install log src/*/build src/*/ins
 
 ct() {
   cd /root/code/
+  colcon build --symlink-install
   colcon test
   colcon test-result --verbose
 }
@@ -75,6 +76,8 @@ alias lsc6c='lsc6 --PATH=CIRCLE'
 alias lsc6s='lsc6 --PATH=STRAIGHT'
 alias lsc6q='lsc6 --PATH=SQUIRCLE'
 alias lsc6x='lsc6 --PATH=COMPLEX'
+
+alias testd='NA_TEST_LOG_DIR=/root/code/.tmp/test_results sudo bash test_docker.sh'
 
 alias makepkg='ros2 pkg create --build-type ament_cmake' # see https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Creating-Your-First-ROS2-Package.html
 
