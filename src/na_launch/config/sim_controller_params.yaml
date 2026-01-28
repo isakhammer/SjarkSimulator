@@ -25,3 +25,9 @@ sim_node:
     max_thrust: 40.0
     max_delta: 1.57079632679
     max_delta_rate: 0.0
+
+viz_node:
+  ros__parameters:
+    convert_legacy_ned_to_enu: false
+    use_urdf: true
+    urdf_path: /root/code/src/na_launch/urdf/boat.urdf

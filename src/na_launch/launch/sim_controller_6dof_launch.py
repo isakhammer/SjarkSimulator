@@ -33,7 +33,7 @@ def generate_launch_description():
         namespace="sim_ns",
         executable="sim_node",
         name="sim_node",
-        parameters=[{"config_path": config_path}],
+        parameters=[config_path],
     )
 
     urdf_path = os.path.join(pkg_path, "urdf", "boat.urdf")
@@ -58,7 +58,7 @@ def generate_launch_description():
             namespace="controller_ns",
             executable="controller_node",
             name="controller_node",
-            parameters=[{"config_path": config_path}],
+            parameters=[config_path],
         ),
         TimerAction(
             period=3.0,
@@ -69,13 +69,21 @@ def generate_launch_description():
             namespace="planner_ns",
             executable="planner_node",
             name="planner_node",
-            parameters=[{"path_type": LaunchConfiguration("path_type")}],
+            parameters=[config_path, {"path_type": LaunchConfiguration("path_type")}],
         ),
         Node(
             package="na_viz",
             namespace="viz_ns",
             executable="viz_node",
-            name="viz_node"
+            name="viz_node",
+            parameters=[config_path],
+        ),
+        Node(
+            package="na_viz",
+            namespace="viz_ns",
+            executable="tf_node",
+            name="tf_node",
+            parameters=[config_path],
         ),
         robot_state_publisher,
         Node(
