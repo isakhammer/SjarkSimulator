@@ -59,7 +59,7 @@ The generalized velocity vector is
 
 `nu = [u v w p q r]^T `
 
-where u, v, w are body fixed linear velocities and p, q, r are body fixed angular rates.
+where `u, v, w` are body fixed linear velocities and `p, q, r` are body fixed angular rates.
 
 The generalized position and attitude vector is
 
