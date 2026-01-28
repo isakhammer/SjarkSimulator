@@ -12,6 +12,9 @@ from nav_msgs.msg import Odometry
 from na_msg.msg import BoatState, RotorCommand
 from tf2_msgs.msg import TFMessage
 
+YAW_RESPONSE_DURATION_SEC = float(os.environ.get("NA_YAW_RESPONSE_SEC", "6.0"))
+YAW_RESPONSE_R_MIN = float(os.environ.get("NA_YAW_RESPONSE_R_MIN", "0.02"))
+
 
 def _wait_for_message(node, topic, msg_type, timeout_sec, predicate=None):
     received = {"msg": None}
@@ -167,12 +170,39 @@ class TestSim6DofLaunch(unittest.TestCase):
         )
         self.assertIsNotNone(msg, "No simulator state received before command")
 
-        left_cmd = _drive_sim_for(self.node, thrust=20.0, delta=-0.3, duration_sec=2.0)
+        left_cmd = _drive_sim_for(
+            self.node, thrust=20.0, delta=-0.3, duration_sec=YAW_RESPONSE_DURATION_SEC
+        )
         self.assertIsNotNone(left_cmd, "No simulator state received during left command")
         self.assertGreater(left_cmd.u, 0.05, "Surge speed did not increase under thrust")
-        self.assertGreater(left_cmd.r, 0.01, "Yaw rate did not respond to left command")
+        self.assertGreater(
+            abs(left_cmd.r),
+            YAW_RESPONSE_R_MIN,
+            "Yaw rate did not respond to left command",
+        )
+        self.assertLess(
+            left_cmd.r * float(left_cmd.delta),
+            0.0,
+            "Yaw rate sign should oppose steering angle",
+        )
 
-        right_cmd = _drive_sim_for(self.node, thrust=20.0, delta=0.3, duration_sec=2.0)
+        right_cmd = _drive_sim_for(
+            self.node, thrust=20.0, delta=0.3, duration_sec=YAW_RESPONSE_DURATION_SEC
+        )
         self.assertIsNotNone(right_cmd, "No simulator state received during right command")
         self.assertGreater(right_cmd.u, 0.05, "Surge speed did not increase under thrust")
-        self.assertLess(right_cmd.r, -0.01, "Yaw rate did not respond to right command")
+        self.assertGreater(
+            abs(right_cmd.r),
+            YAW_RESPONSE_R_MIN,
+            "Yaw rate did not respond to right command",
+        )
+        self.assertLess(
+            right_cmd.r * float(right_cmd.delta),
+            0.0,
+            "Yaw rate sign should oppose steering angle",
+        )
+        self.assertGreater(
+            abs(left_cmd.r - right_cmd.r),
+            YAW_RESPONSE_R_MIN,
+            "Yaw rate did not change when steering direction flipped",
+        )

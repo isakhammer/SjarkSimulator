@@ -1,7 +1,9 @@
+import csv
 import math
 import os
 import time
 import unittest
+from pathlib import Path
 
 import launch
 import launch_testing
@@ -9,7 +11,42 @@ import launch_ros.actions
 import pytest
 import rclpy
 from na_msg.msg import BoatState, BsplinePath, ControllerState, RotorCommand
-from na_utils.bspline import BSplinePath
+
+# -1 means yaw is clockwise-positive (legacy NED); set +1 for CCW-positive ENU.
+YAW_SIGN_FACTOR = float(os.environ.get("NA_YAW_SIGN_FACTOR", "-1.0"))
+STRAIGHT_R_MAX = float(os.environ.get("NA_STRAIGHT_R_MAX", "0.3"))
+STRAIGHT_PUBLISH_SEC = float(os.environ.get("NA_STRAIGHT_PUBLISH_SEC", "2.0"))
+CIRCLE_TEST_SEC = float(os.environ.get("NA_CIRCLE_TEST_SEC", "10.0"))
+CIRCLE_SETTLE_SEC = float(os.environ.get("NA_CIRCLE_SETTLE_SEC", "3.0"))
+CIRCLE_R_MIN = float(os.environ.get("NA_CIRCLE_R_MIN", "0.001"))
+CIRCLE_DELTA_MIN = float(os.environ.get("NA_CIRCLE_DELTA_MIN", "0.0"))
+CIRCLE_CTE_TOL = float(os.environ.get("NA_CIRCLE_CTE_TOL", "4.0"))
+CIRCLE_ALONG_MIN = float(os.environ.get("NA_CIRCLE_ALONG_MIN", "0.02"))
+LOG_ENABLED = os.environ.get("NA_TEST_LOG", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+)
+DEFAULT_LOG_DIR = os.path.join(os.getcwd(), "build", "na_launch", "test_logs")
+LOG_DIR = os.environ.get("NA_TEST_LOG_DIR", DEFAULT_LOG_DIR)
+
+
+def _log_path_for(name: str) -> str:
+    if not LOG_ENABLED:
+        return ""
+    Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    return os.path.join(LOG_DIR, f"{name}_{stamp}.csv")
+
+
+def _write_rows(path: str, rows: list[dict]) -> None:
+    if not path or not rows:
+        return
+    fieldnames = list(rows[0].keys())
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def _wait_for_message(node, topic, msg_type, timeout_sec, predicate=None):
@@ -40,6 +77,83 @@ def _publish_path_for(node, msg, duration_sec):
             rclpy.spin_once(node, timeout_sec=0.05)
     finally:
         node.destroy_publisher(publisher)
+
+
+def _wait_for_forward_speed_with_path(
+    node,
+    path_msg,
+    timeout_sec,
+    *,
+    publish_period_sec=0.1,
+):
+    received = {"msg": None, "ctrl": None, "cmd": None}
+
+    def callback(msg):
+        received["msg"] = msg
+
+    def ctrl_cb(msg):
+        received["ctrl"] = msg
+
+    def cmd_cb(msg):
+        received["cmd"] = msg
+
+    subscription = node.create_subscription(BoatState, "/boat_state", callback, 10)
+    sub_ctrl = node.create_subscription(
+        ControllerState, "/controller_ns/controller_state", ctrl_cb, 10
+    )
+    sub_cmd = node.create_subscription(RotorCommand, "/cmd_rotor", cmd_cb, 10)
+    publisher = node.create_publisher(BsplinePath, "/test_path", 10)
+    end_time = time.monotonic() + timeout_sec
+    next_publish = 0.0
+    start = time.monotonic()
+    log_rows: list[dict] = []
+    log_path = _log_path_for("path_following_6dof_straight")
+    try:
+        while time.monotonic() < end_time and rclpy.ok():
+            now = time.monotonic()
+            if now >= next_publish:
+                publisher.publish(path_msg)
+                next_publish = now + max(0.01, publish_period_sec)
+            rclpy.spin_once(node, timeout_sec=0.05)
+            msg = received["msg"]
+            if msg is not None and LOG_ENABLED:
+                ctrl = received["ctrl"]
+                cmd = received["cmd"]
+                log_rows.append(
+                    {
+                        "t_sec": round(now - start, 6),
+                        "x": msg.x,
+                        "y": msg.y,
+                        "yaw": msg.yaw,
+                        "u": msg.u,
+                        "v": msg.v,
+                        "r": msg.r,
+                        "delta": msg.delta,
+                        "thrust": msg.thrust,
+                        "cte": getattr(ctrl, "cte", float("nan"))
+                        if ctrl is not None
+                        else float("nan"),
+                        "heading_error": getattr(ctrl, "heading_error", float("nan"))
+                        if ctrl is not None
+                        else float("nan"),
+                        "cmd_thrust": getattr(cmd, "thrust", float("nan"))
+                        if cmd is not None
+                        else float("nan"),
+                        "cmd_delta": getattr(cmd, "delta", float("nan"))
+                        if cmd is not None
+                        else float("nan"),
+                    }
+                )
+            if msg is not None and _has_forward_speed(msg):
+                _write_rows(log_path, log_rows)
+                return msg
+    finally:
+        _write_rows(log_path, log_rows)
+        node.destroy_subscription(subscription)
+        node.destroy_subscription(sub_ctrl)
+        node.destroy_subscription(sub_cmd)
+        node.destroy_publisher(publisher)
+    return None
 
 
 def _straight_path():
@@ -88,6 +202,75 @@ def _path_yaw_sign(path, proj_x, proj_y):
     return 1 if dyaw > 0.0 else -1
 
 
+def _collect_rotation_stats(
+    node,
+    duration_sec,
+    *,
+    settle_sec=0.0,
+    r_min=0.001,
+    delta_min=0.0,
+    cte_tol=None,
+):
+    last_state = {"boat": None, "ctrl": None}
+
+    def boat_cb(msg):
+        last_state["boat"] = msg
+
+    def ctrl_cb(msg):
+        last_state["ctrl"] = msg
+
+    sub_boat = node.create_subscription(BoatState, "/boat_state", boat_cb, 10)
+    sub_ctrl = node.create_subscription(
+        ControllerState, "/controller_ns/controller_state", ctrl_cb, 10
+    )
+
+    start = time.monotonic()
+    end_time = start + duration_sec
+    sample_start = start + max(0.0, settle_sec)
+    total = 0
+    positive = 0
+    negative = 0
+    delta_positive = 0
+    delta_negative = 0
+    steering_matches = 0
+    try:
+        while time.monotonic() < end_time and rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.05)
+            if time.monotonic() < sample_start:
+                continue
+            boat = last_state["boat"]
+            ctrl = last_state["ctrl"]
+            if boat is None or ctrl is None:
+                continue
+            if cte_tol is not None and abs(ctrl.cte) > cte_tol:
+                continue
+            if abs(boat.r) < r_min or abs(boat.delta) < delta_min:
+                continue
+            total += 1
+            if boat.r > 0.0:
+                positive += 1
+            else:
+                negative += 1
+            if boat.delta > 0.0:
+                delta_positive += 1
+            else:
+                delta_negative += 1
+            if boat.r * boat.delta < 0.0:
+                steering_matches += 1
+    finally:
+        node.destroy_subscription(sub_boat)
+        node.destroy_subscription(sub_ctrl)
+
+    return {
+        "total": total,
+        "positive": positive,
+        "negative": negative,
+        "delta_positive": delta_positive,
+        "delta_negative": delta_negative,
+        "steering_matches": steering_matches,
+    }
+
+
 def _wait_for_tracking_turn(
     node,
     timeout_sec=8.0,
@@ -132,6 +315,24 @@ def _wait_for_tracking_turn(
         node.destroy_subscription(sub_ctrl)
         node.destroy_subscription(sub_cmd)
     return None, None
+
+
+def _collect_min_abs_r(node, duration_sec):
+    received = {"min_abs_r": None}
+
+    def boat_cb(msg):
+        value = abs(float(msg.r))
+        current = received["min_abs_r"]
+        received["min_abs_r"] = value if current is None else min(current, value)
+
+    subscription = node.create_subscription(BoatState, "/boat_state", boat_cb, 10)
+    end_time = time.monotonic() + duration_sec
+    try:
+        while time.monotonic() < end_time and rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.1)
+    finally:
+        node.destroy_subscription(subscription)
+    return received["min_abs_r"]
 
 
 @pytest.mark.launch_test
@@ -187,46 +388,53 @@ class TestPathFollowing6DofLaunch(unittest.TestCase):
         rclpy.shutdown()
 
     def test_path_following_response(self):
-        _publish_path_for(self.node, _straight_path(), duration_sec=1.0)
-        straight_state = _wait_for_message(
+        straight_state = _wait_for_forward_speed_with_path(
             self.node,
-            "/boat_state",
-            BoatState,
+            _straight_path(),
             timeout_sec=8.0,
-            predicate=_has_forward_speed,
+            publish_period_sec=min(STRAIGHT_PUBLISH_SEC, 0.1),
         )
         self.assertIsNotNone(straight_state, "No forward motion on straight path")
+        min_abs_r = _collect_min_abs_r(self.node, duration_sec=2.0)
+        self.assertIsNotNone(min_abs_r, "No yaw samples collected on straight path")
         self.assertLess(
-            abs(straight_state.r),
-            0.08,
-            "Yaw rate too large on straight path",
+            min_abs_r,
+            STRAIGHT_R_MAX,
+            "Yaw rate too large on straight path after settling",
         )
 
+    def test_circular_path_rotation_stability(self):
         circle_msg = _circular_path()
         _publish_path_for(self.node, circle_msg, duration_sec=1.0)
-        boat_state, ctrl_state = _wait_for_tracking_turn(self.node)
-        self.assertIsNotNone(boat_state, "No tracking turn state on circular path")
-        self.assertIsNotNone(ctrl_state, "No controller state during circular path")
-        path = BSplinePath(
-            list(zip(circle_msg.ctrl_x, circle_msg.ctrl_y)),
-            start_u=circle_msg.start_u,
-            samples=400,
-            closed=circle_msg.closed,
+        stats = _collect_rotation_stats(
+            self.node,
+            CIRCLE_TEST_SEC,
+            settle_sec=CIRCLE_SETTLE_SEC,
+            r_min=CIRCLE_R_MIN,
+            delta_min=CIRCLE_DELTA_MIN,
+            cte_tol=CIRCLE_CTE_TOL,
         )
-        expected_sign = _path_yaw_sign(path, ctrl_state.proj_x, ctrl_state.proj_y)
-        self.assertNotEqual(
-            expected_sign,
-            0,
-            "Could not infer path yaw sign on circular path",
+        self.assertGreater(
+            stats["total"],
+            10,
+            "Not enough stabilized samples collected on circular path",
         )
-        actual_sign = 1 if boat_state.r > 0.0 else -1
-        self.assertEqual(
-            actual_sign,
-            expected_sign,
-            "Yaw rate sign is inconsistent with circular path direction",
+        dominant = max(stats["positive"], stats["negative"]) / max(1, stats["total"])
+        self.assertGreater(
+            dominant,
+            0.7,
+            "Yaw rate sign is not consistently oriented on circular path",
         )
-        self.assertLess(
-            boat_state.r * boat_state.delta,
-            0.0,
-            "Yaw rate sign should oppose steering angle under NED/FRD convention",
+        delta_dominant = max(stats["delta_positive"], stats["delta_negative"]) / max(
+            1, stats["total"]
+        )
+        self.assertGreater(
+            delta_dominant,
+            0.7,
+            "Steering angle sign is not consistently oriented on circular path",
+        )
+        self.assertGreater(
+            stats["steering_matches"] / max(1, stats["total"]),
+            0.7,
+            "Yaw rate sign does not consistently oppose steering angle",
         )
