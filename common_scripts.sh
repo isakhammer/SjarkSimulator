@@ -77,7 +77,7 @@ alias lsc6s='lsc6 --PATH=STRAIGHT'
 alias lsc6q='lsc6 --PATH=SQUIRCLE'
 alias lsc6x='lsc6 --PATH=COMPLEX'
 
-alias testd='NA_TEST_LOG_DIR=/root/code/.tmp/test_results sudo bash test_docker.sh'
+alias testd='NA_TEST_LOG_DIR=/root/code/log/na_test_results sudo bash test_docker.sh'
 
 alias makepkg='ros2 pkg create --build-type ament_cmake' # see https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Creating-Your-First-ROS2-Package.html
 
