@@ -3,9 +3,9 @@
 ![Sjark](sjark.jpg)
 
 I got curious about what people use for boat simulators in hobby robotics, but then I realized Gazebo and Isaac Sim are
-kind of the everything engines. Great tools, but also GPU hungry (which I dont have money for).
+kind of the jack of all trades and master of none. Great tools, but also GPU hungry (which I dont have money for).
 
-I mostly care about the math and dynamics, so I built my own fast 6 DOF boat model with quaternions and a Fossen style marine
+I mostly care about the math and dynamics, so I built my own fast easy-to-understand 6 DOF boat model with quaternions and a Fossen style marine
 dynamics formulation. It includes approximations for hydrodynamic damping, Coriolis forces, gravity and buoyancy, and full attitude dynamics in yaw, pitch, and roll. It is a nice middle ground between “toy model” and “too much”. So make sure the time integration was stable in the spherical manifold, I also added exponential integrators to ensure stability and accuracy.
 
 To test the simulator I also added a basic Line-Of-Sight control system, which follows a custom made B Spline path.
