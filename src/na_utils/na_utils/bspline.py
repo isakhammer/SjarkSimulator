@@ -42,7 +42,7 @@ Projection and Frenet frame:
     `BSplinePath.project(x, y)` maps a point onto the spline and returns a
     `SplineProjection` with the projection point and a local Frenet frame:
     - tangent: unit tangent along the spline.
-    - normal: unit normal (perpendicular to the tangent), pointing starboard/right.
+    - normal: unit normal (perpendicular to the tangent), pointing port/left.
     - cte: signed lateral error = dot((x - proj_x, y - proj_y), normal).
 
     `BSplinePath.sample_at_t(t)` evaluates the spline at arc-length t and
