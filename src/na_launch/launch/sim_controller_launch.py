@@ -25,12 +25,25 @@ def generate_launch_description():
         plotjuggler_env['QT_SCREEN_SCALE_FACTORS'] = os.environ['QT_SCREEN_SCALE_FACTORS']
 
     plotjuggler_layout = os.path.join(pkg_path, 'plot_juggler', 'default.xml')
+    config_path = os.path.join(pkg_path, 'config', 'sim_controller_params.yaml')
 
     sim_node = Node(
         package='na_sim',
         namespace='sim_ns',
         executable='sim_node',
         name='sim_node',
+        parameters=[config_path],
+    )
+
+    urdf_path = os.path.join(pkg_path, 'urdf', 'boat.urdf')
+    with open(urdf_path, 'r', encoding='utf-8') as urdf_file:
+        robot_description = urdf_file.read()
+
+    robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        parameters=[{'robot_description': robot_description}],
     )
 
     return LaunchDescription([
@@ -44,6 +57,7 @@ def generate_launch_description():
             namespace='controller_ns',
             executable='controller_node',
             name='controller_node',
+            parameters=[config_path],
         ),
         TimerAction(
             period=3.0,
@@ -54,14 +68,23 @@ def generate_launch_description():
             namespace='planner_ns',
             executable='planner_node',
             name='planner_node',
-            parameters=[{"path_type": LaunchConfiguration("path_type")}],
+            parameters=[config_path, {"path_type": LaunchConfiguration("path_type")}],
         ),
         Node(
             package='na_viz',
             namespace='viz_ns',
             executable='viz_node',
-            name='viz_node'
+            name='viz_node',
+            parameters=[config_path],
         ),
+        Node(
+            package='na_viz',
+            namespace='viz_ns',
+            executable='tf_node',
+            name='tf_node',
+            parameters=[config_path],
+        ),
+        robot_state_publisher,
         Node(
             package='rviz2',
             executable='rviz2',
