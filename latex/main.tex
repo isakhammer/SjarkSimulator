@@ -185,7 +185,7 @@ $\boldsymbol{\tau}_3=[X,Y,N]^\top$.
     \midrule
     $x,y,z$ & Position of the body origin & $\{W\}$ & \si{\meter} \\
     $\phi,\theta,\psi$ & Roll, pitch, yaw (ZYX) & $\{W\}$ & \si{\radian} \\
-    $u,v,w$ & Linear velocity & $\{B\}$ & \si{\meter\per\second} \\
+    $u,v,w$ & Body linear velocity components (surge $u$, sway $v$, heave $w$) & $\{B\}$ & \si{\meter\per\second} \\
     $p,q,r$ & Angular velocity & $\{B\}$ & \si{\radian\per\second} \\
     $\mathbf{q}_{WB}$ & Unit quaternion, body-to-world & -- & -- \\
     $T$ & Thrust magnitude & $\{B\}$ & \si{\newton} \\
@@ -211,6 +211,8 @@ $\boldsymbol{\tau}_3=[X,Y,N]^\top$.
     $\boldsymbol{\eta}$ & $[x,y,z,\phi,\theta,\psi]^\top$ & $6\times 1$ \\
     $\boldsymbol{\nu}$ & $[u,v,w,p,q,r]^\top$ & $6\times 1$ \\
     $\boldsymbol{\tau}$ & $[X,Y,Z,K,M,N]^\top$ & $6\times 1$ \\
+    $\mathbf{p}$ & $[x,y,z]^\top$ & $3\times 1$ \\
+    $\mathbf{v}$ & $[u,v,w]^\top$ & $3\times 1$ \\
     $\boldsymbol{\omega}$ & $[p,q,r]^\top$ & $3\times 1$ \\
     $\Delta\mathbf{q}$ & Expmap delta quaternion & $4\times 1$ \\
     $\boldsymbol{\phi}$ & Rotation vector, $\boldsymbol{\omega}\Delta t$ & $3\times 1$ \\
