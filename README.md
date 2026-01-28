@@ -10,7 +10,7 @@ dynamics formulation. It includes approximations for hydrodynamic damping, Corio
 
 To test the simulator I also added a basic Line-Of-Sight control system, which follows a custom made B Spline path.
 
-While this is a side project is incredible fn It is still a quite ambitious hobby project, so I use Codex to write all the tests and harder debugging so I can focus on the fun parts! 
+While this is a side project, it is still a quite ambitious hobby project, so I use Codex to write all the tests and harder debugging so I can focus on the fun parts (which is the mathematics and physics)! 
 
 
 # Sjark
