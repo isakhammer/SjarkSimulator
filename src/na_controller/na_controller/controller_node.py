@@ -7,7 +7,7 @@ import rclpy
 from rclpy.node import Node
 from ament_index_python.packages import get_package_share_directory
 
-from na_controller.los import desired_heading_ned, path_yaw_from_tangent, wrap_to_pi
+from na_controller.los import path_yaw_from_tangent, wrap_to_pi
 from na_utils.bspline import (
     BSplinePath,
     ProjectionTracker,
@@ -37,6 +37,7 @@ class ControllerNode(Node):
             "heading_kd": 0.5,
             "max_thrust": 40.0,
             "max_delta": math.pi / 2.0,
+            "cte_gain": 1.0,
             "samples_per_meter": 4.0,
             "max_proj_jump": 0.2,
         }
@@ -145,12 +146,14 @@ class ControllerNode(Node):
                     "heading_kd",
                     "max_thrust",
                     "max_delta",
+                    "cte_gain",
                     "max_proj_jump",
                 )
             )
         }
         lookahead = float(params["lookahead"])
         max_proj_jump = float(params["max_proj_jump"])
+        cte_gain = float(params["cte_gain"])
         proj_t = self.projection_tracker.project_t(
             self.spline,
             x,
@@ -174,7 +177,15 @@ class ControllerNode(Node):
         target_sample = self.spline.sample_at_t(target_t)
         target_x, target_y = target_sample.point
 
-        desired_heading = desired_heading_ned(proj_yaw, cte, lookahead)
+        to_target_x = target_x - x
+        to_target_y = target_y - y
+        bearing_to_target = math.atan2(to_target_y, to_target_x)
+        # Avoid chasing a lookahead point that is behind the vessel.
+        if (to_target_x * tx + to_target_y * ty) <= 0.0:
+            bearing_to_target = proj_yaw
+        desired_heading = wrap_to_pi(
+            bearing_to_target - math.atan2(cte_gain * cte, lookahead)
+        )
         heading_error = wrap_to_pi(desired_heading - psi)
 
         base_thrust = float(params["base_thrust"])
