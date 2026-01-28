@@ -1,4 +1,4 @@
-# Backlog (Nautomatic)
+# Backlog (SjarkSimulator)
 
 Priorities and work items for the simulation + control stack.
 
@@ -8,7 +8,7 @@ Goal: replace the current sim with a monohull 3-DOF model and a single stern rot
 
 - Define the 3-DOF state, frames, and sign conventions (ENU/FLU, yaw sign).
 - Define actuator interface: thrust magnitude and rotor angle (plus optional rate limits / dynamics).
-- Implement the model and actuator in `src/na_sim/na_sim`.
+- Implement the model and actuator in `src/sj_sim/sj_sim`.
 - Keep topic compatibility where possible (or provide a compatibility node).
 - Add fast unit tests: dynamics sanity, actuator saturation, regression for a known maneuver.
 
@@ -45,7 +45,7 @@ Acceptance checks
 
 Goal: make `lsc` usable headless and interactive by toggling visualization nodes.
 
-- Add launch arguments to `na_launch/sim_controller_launch.py`:
+- Add launch arguments to `sj_launch/sim_controller_launch.py`:
   - `rviz:=true|false`
   - `plotjuggler:=true|false`
 - Support combinations: both, either one, or none (default should be none for CI/headless).
@@ -67,4 +67,4 @@ Acceptance checks
 - Rotor angle convention: 0° = forward along +x, + = port/left (pick and document).
 - Actuator command representation: absolute rotor angle vs relative to hull heading.
 - Whether to keep `/cmd_thrust` as the primary command topic long-term or migrate to a dedicated message.
-- Add derived/world-frame force and moment fields to `na_msg/BoatState`.
+- Add derived/world-frame force and moment fields to `sj_msg/BoatState`.

@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-docker build -t "nautomatica-base" -f Dockerfile .
+docker build -t "sjarksimulator-base" -f Dockerfile .

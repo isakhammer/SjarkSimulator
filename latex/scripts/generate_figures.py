@@ -5,11 +5,11 @@ import os
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-UTILS_PATH = os.path.join(ROOT, "src", "na_utils")
+UTILS_PATH = os.path.join(ROOT, "src", "sj_utils")
 if UTILS_PATH not in sys.path:
     sys.path.insert(0, UTILS_PATH)
 
-from na_utils.bspline import BSplinePath  # noqa: E402
+from sj_utils.bspline import BSplinePath  # noqa: E402
 import numpy as np  # noqa: E402
 
 FIG_DIR = os.path.join(os.path.dirname(__file__), "..", "figures")

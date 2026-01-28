@@ -16,19 +16,19 @@ controller, utilities, and tests together.
 ## Regression tests for sign conventions
 These tests guard against "turns the wrong way" regressions:
 
-- `src/na_utils/tests/test_bspline.py`:
+- `src/sj_utils/tests/test_bspline.py`:
   validates the B-spline Frenet frame and that `cte` matches the left-normal
   convention on a circular path.
-- `src/na_utils/tests/test_enu_projection.py`:
+- `src/sj_utils/tests/test_enu_projection.py`:
   checks that ProjectionTracker kinematic prediction uses ENU conventions.
-- `src/na_controller/test/test_los_enu.py`:
+- `src/sj_controller/test/test_los_enu.py`:
   validates LOS heading math and ENU yaw conversions.
-- `src/na_sim/test/test_enu_conventions.py`:
+- `src/sj_sim/test/test_enu_conventions.py`:
   validates ENU kinematics for 3DOF and quaternion yaw rotations.
-- `src/na_launch/test/test_path_following_3dof_launch.py`:
+- `src/sj_launch/test/test_path_following_3dof_launch.py`:
   launches the 3DOF sim + controller and asserts that the yaw-rate sign matches
   the local path direction inferred from the spline tangent.
-- `src/na_launch/test/test_path_following_6dof_launch.py`:
+- `src/sj_launch/test/test_path_following_6dof_launch.py`:
   same as above for the 6DOF sim.
 
 These tests are intended to catch mismatches between path geometry and the

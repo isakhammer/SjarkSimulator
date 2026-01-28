@@ -1,5 +1,5 @@
 
-IMAGE_NAME="nautomatica-base:latest"
+IMAGE_NAME="sjarksimulator-base:latest"
 
 function run_docker()  {
   image_name=$IMAGE_NAME

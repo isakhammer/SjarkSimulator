@@ -1,6 +1,6 @@
 # Project Guidelines
 
-These guidelines keep the Nautomatic ROS 2 workspace consistent, testable, and easy to evolve.
+These guidelines keep the SjarkSimulator ROS 2 workspace consistent, testable, and easy to evolve.
 
 ## Workspace Expectations
 
@@ -12,30 +12,30 @@ These guidelines keep the Nautomatic ROS 2 workspace consistent, testable, and e
 
 ## Package Boundaries
 
-- Keep shared utilities in `src/na_utils`; avoid duplicating helpers across packages.
-- Put ROS interfaces only in `src/na_msg` (msgs/srvs/actions).
-- Launch and config assets belong in `src/na_launch/launch` and `src/na_launch/config`.
-- Put reusable computational procedures (splines, geometry, matrix ops, ODE integrators) in `src/na_utils` and cover them with tests.
+- Keep shared utilities in `src/sj_utils`; avoid duplicating helpers across packages.
+- Put ROS interfaces only in `src/sj_msg` (msgs/srvs/actions).
+- Launch and config assets belong in `src/sj_launch/launch` and `src/sj_launch/config`.
+- Put reusable computational procedures (splines, geometry, matrix ops, ODE integrators) in `src/sj_utils` and cover them with tests.
 
 ## ROS Node Organization
 
 - Keep ROS-specific logic in `*_node.py` (message parsing, callbacks, timers, publishers/subscribers).
 - Move domain logic into non-node modules (for example, `control.py`, `planner.py`, `simulation.py`) that handle math, projections, and controller selection.
 - Apply this split consistently across control, simulation, planner, and state estimation packages.
-- The only visualization node should live in `na_viz` and act as a listener-only client (no control or pipeline dependencies).
+- The only visualization node should live in `sj_viz` and act as a listener-only client (no control or pipeline dependencies).
 - Core logic must be ROS-agnostic; only node files and visualization code should import or depend on ROS APIs.
 
 ## Modeling & Control Changes
 
 - Keep units in SI and document frames and sign conventions for dynamics.
 - When changing dynamics, update related control assumptions and tests.
-- Prefer parameters in YAML (for example, `src/na_launch/config/sim_controller_params.yaml`).
+- Prefer parameters in YAML (for example, `src/sj_launch/config/sim_controller_params.yaml`).
 
 ## Testing & Linting
 
 - Run `ct` (from `common_scripts.sh`) after implementing features to execute `colcon test` and print results.
 - Maintain linter coverage (`flake8`, `pep257`, `xmllint`) when adding files.
-- Docker test runs (`test_docker.sh` or `testd`) write CSV logs to `log/na_test_results` by default; override with `NA_TEST_LOG_DIR`.
+- Docker test runs (`test_docker.sh` or `testd`) write CSV logs to `log/sj_test_results` by default; override with `SJ_TEST_LOG_DIR`.
 
 ## Planning & Documentation
 

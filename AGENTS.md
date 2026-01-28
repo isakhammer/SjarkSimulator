@@ -1,36 +1,36 @@
 # Repository Guidelines
 
-This repository is a ROS 2 workspace containing message definitions, simulation, planning, control, visualization, and launch packages for the Nautomatic stack.
+This repository is a ROS 2 workspace containing message definitions, simulation, planning, control, visualization, and launch packages for the SjarkSimulator stack.
 
 ## Project Structure & Module Organization
 
-- `src/` holds ROS 2 packages (Python and CMake-based). Core packages include `na_msg` (msgs/srvs/actions), `na_sim`, `na_planner`, `na_controller`, `na_viz`, `na_utils`, and `na_launch`.
+- `src/` holds ROS 2 packages (Python and CMake-based). Core packages include `sj_msg` (msgs/srvs/actions), `sj_sim`, `sj_planner`, `sj_controller`, `sj_viz`, `sj_utils`, and `sj_launch`.
 - Package-specific tests live under `src/<package>/test`.
-- Launch and configuration assets are in `src/na_launch/launch`, `src/na_launch/config`, `src/na_launch/rviz`, and `src/na_launch/plot_juggler`.
+- Launch and configuration assets are in `src/sj_launch/launch`, `src/sj_launch/config`, `src/sj_launch/rviz`, and `src/sj_launch/plot_juggler`.
 - Build outputs land in `build/`, `install/`, and `log/` after running `colcon`.
 
 ## Build, Test, and Development Commands
 
-- `./build_docker.sh`: build the `nautomatica-base` Docker image.
+- `./build_docker.sh`: build the `sjarksimulator-base` Docker image.
 - `./run_docker.sh`: run the container with X11 and mount the repo at `/root/code`.
 - `./test_docker.sh`: run `ct` inside the Docker container.
 - `./build_overview_docker.sh`: build the LaTeX overview PDF (outputs `latex/output/main.pdf`).
 - `colcon build --symlink-install`: build the workspace from the repo root.
 - `source install/setup.bash`: load the workspace overlay after building.
-- `ros2 launch na_launch controller_launch.py`: run the controller stack.
-- `ros2 launch na_launch sim_controller_launch.py`: run the simulation + controller stack.
+- `ros2 launch sj_launch controller_launch.py`: run the controller stack.
+- `ros2 launch sj_launch sim_controller_launch.py`: run the simulation + controller stack.
 - `colcon test`: run all package tests (including linters).
 
 ## Developer Workflow Notes
 
 - Primary workflow runs inside Docker via `./run_docker.sh`.
-- Common aliases in `common_scripts.sh`: `cb` for full `colcon build` + source, `lsc` for `ros2 launch na_launch sim_controller_launch.py`.
+- Common aliases in `common_scripts.sh`: `cb` for full `colcon build` + source, `lsc` for `ros2 launch sj_launch sim_controller_launch.py`.
 
 ## Coding Style & Naming Conventions
 
 - Python code follows PEP 8 with 4-space indentation; docstrings are enforced via PEP 257.
 - Linting is handled by `ament_flake8` and `ament_pep257` tests.
-- Use `na_*` for ROS 2 package names and snake_case for Python modules.
+- Use `sj_*` for ROS 2 package names and snake_case for Python modules.
 - Node entrypoints follow the existing `*_node.py` pattern (for example, `sim_node.py`).
 
 ## Testing Guidelines

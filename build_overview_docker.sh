@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_NAME="${IMAGE_NAME:-nautomatic-overview:latest}"
+IMAGE_NAME="${IMAGE_NAME:-sjarksimulator-overview:latest}"
 SOURCE_PDF="latex/build/main.pdf"
 OUTPUT_DIR="latex/output"
 OUTPUT_PDF="${OUTPUT_DIR}/main.pdf"

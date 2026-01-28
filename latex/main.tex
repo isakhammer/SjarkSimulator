@@ -12,8 +12,8 @@
 \usetikzlibrary{arrows.meta,calc,positioning,shapes.geometric}
 \pgfplotsset{compat=1.18}
 
-\title{Nautomatic: Planning, Control \& Simulation Overview}
-\author{Nautomatic contributors}
+\title{SjarkSimulator: Planning, Control \& Simulation Overview}
+\author{SjarkSimulator contributors}
 \date{\today}
 
 \begin{document}
@@ -31,12 +31,12 @@ cases, and limitations so expectations and tuning tradeoffs are explicit.
 
 \subsection{Primary source files}
 \begin{itemize}
-  \item Dynamics model: \texttt{src/na\_sim/na\_sim/Boat3DOF.py}
-  \item Simulator node: \texttt{src/na\_sim/na\_sim/sim\_node.py}
-  \item Planner node: \texttt{src/na\_planner/na\_planner/planner\_node.py}
-  \item Controller node: \texttt{src/na\_controller/na\_controller/controller\_node.py}
-  \item B-spline utilities: \texttt{src/na\_utils/na\_utils/bspline.py}
-  \item Default parameters: \texttt{src/na\_launch/config/sim\_controller\_params.yaml}
+  \item Dynamics model: \texttt{src/sj\_sim/sj\_sim/Boat3DOF.py}
+  \item Simulator node: \texttt{src/sj\_sim/sj\_sim/sim\_node.py}
+  \item Planner node: \texttt{src/sj\_planner/sj\_planner/planner\_node.py}
+  \item Controller node: \texttt{src/sj\_controller/sj\_controller/controller\_node.py}
+  \item B-spline utilities: \texttt{src/sj\_utils/sj\_utils/bspline.py}
+  \item Default parameters: \texttt{src/sj\_launch/config/sim\_controller\_params.yaml}
 \end{itemize}
 
 \section{System architecture (ROS 2)}
@@ -50,10 +50,10 @@ The stack is a minimal closed loop:
 
 \subsection{Key topics}
 \begin{itemize}
-  \item \texttt{/planner\_ns/path} (\texttt{na\_msg/BsplinePath}) --- path control points.
+  \item \texttt{/planner\_ns/path} (\texttt{sj\_msg/BsplinePath}) --- path control points.
   \item \texttt{/boat\_state} (\texttt{std\_msgs/Float32MultiArray}) --- state vector $[x,y,\psi,u,v,r]$.
   \item \texttt{/cmd\_thrust} (\texttt{std\_msgs/Float32MultiArray}) --- actuator command $[T,\delta]$.
-  \item \texttt{/controller\_ns/controller\_state} (\texttt{na\_msg/ControllerState}) --- debug projection/CTE data.
+  \item \texttt{/controller\_ns/controller\_state} (\texttt{sj\_msg/ControllerState}) --- debug projection/CTE data.
   \item \texttt{/odom} (\texttt{nav\_msgs/Odometry}) and TF \texttt{map} $\rightarrow$ \texttt{base\_link}.
 \end{itemize}
 
@@ -116,7 +116,7 @@ so a positive $\psi$ rotates the East axis toward North in the horizontal plane.
 \paragraph{Implementation mapping.}
 State estimates, logged trajectories, and planner inputs store $x,y,z$ in ENU.
 The kinematic updates in the simulator and tests (e.g.,
-\texttt{src/na\_sim/test/test\_enu\_conventions.py}) interpret $\psi$ using the
+\texttt{src/sj\_sim/test/test\_enu\_conventions.py}) interpret $\psi$ using the
 counterclockwise ENU convention and use $\psi$ to map body-frame velocities
 into the world frame consistent with the heading direction above.
 
@@ -266,7 +266,7 @@ as $u_{\mathrm{spline}}$ when needed; the arc-length parameter is denoted $t$
 notation, e.g.\ $\dot{x}$.
 \clearpage
 \section{Planning (path generation)}
-\subsection{Published message: \texttt{na\_msg/BsplinePath}}
+\subsection{Published message: \texttt{sj\_msg/BsplinePath}}
 The planner publishes a \texttt{BsplinePath} message consisting of parallel
 arrays \texttt{ctrl\_x}, \texttt{ctrl\_y} (and \texttt{ctrl\_z}, currently always
 zero). The controller requires:
@@ -364,7 +364,7 @@ cross-track error
 \]
 With this convention, $cte > 0$ means the boat is to the left of the path
 tangent direction.
-These geometric utilities in \texttt{na\_utils} use the ENU/FLU convention
+These geometric utilities in \texttt{sj\_utils} use the ENU/FLU convention
 directly when computing $\psi_{path}$.
 
 \subsection{\texttt{ProjectionTracker}}
@@ -403,7 +403,7 @@ $\delta$ produces a negative yaw moment, so the proportional term uses a leading
 minus sign, while the damping term uses $+k_d r$ to oppose yaw-rate excursions.
 
 \subsection{Configuration parameters}
-Default parameters live in \texttt{src/na\_launch/config/sim\_controller\_params.yaml}.
+Default parameters live in \texttt{src/sj\_launch/config/sim\_controller\_params.yaml}.
 \texttt{config\_path} can override the YAML file for both simulator and controller.
 
 \subsection{Controller parameters}
@@ -636,7 +636,7 @@ Solving for $\dot{\boldsymbol{\nu}}_3$ yields:
 \end{align}
 
 \subsubsection{Implementation mapping}
-\texttt{Boat3DOF.dynamics()} in \texttt{src/na\_sim/na\_sim/Boat3DOF.py} evaluates
+\texttt{Boat3DOF.dynamics()} in \texttt{src/sj\_sim/sj\_sim/Boat3DOF.py} evaluates
 the kinematics, computes $(X,Y,N)$ from $(T,\delta)$, and applies the three
 equations above to return $\dot{\mathbf{x}}$.
 
@@ -653,7 +653,7 @@ equations above to return $\dot{\mathbf{x}}$.
 \subsubsection{Purpose}
 This subsection states the standard 6~DOF model used in Fossen-style marine
 craft simulation and matches the implementation in
-\texttt{src/na\_sim/na\_sim/fossen.py} (\texttt{Fossen6DOF}).
+\texttt{src/sj\_sim/sj\_sim/fossen.py} (\texttt{Fossen6DOF}).
 
 \subsubsection{Kinematics}
 Let $\boldsymbol{\eta}=[x,y,z,\phi,\theta,\psi]^\top$ and
@@ -976,7 +976,7 @@ $\mathbf{D}(\boldsymbol{\nu}_r)\boldsymbol{\nu}_r$ is the sum of diagonal linear
 and quadratic damping. In the code this is implemented by
 \texttt{Fossen6DOF.state\_derivative()} and \texttt{Fossen6DOF.dynamics()} using
 \texttt{coriolis\_from\_mass\_matrix()} and \texttt{damping()} in
-\texttt{src/na\_sim/na\_sim/fossen.py}.
+\texttt{src/sj\_sim/sj\_sim/fossen.py}.
 
 Integration uses \texttt{Fossen6DOF.step()} with one of:
 \begin{itemize}
@@ -999,23 +999,23 @@ The following checks catch most sign and frame mistakes before tuning:
   \item Quaternion stays normalized: $\|\mathbf{q}_{WB}\|=1$ (after renormalization).
 \end{itemize}
 The repository includes these checks as unit tests in
-\texttt{src/na\_sim/test} to support future 6~DOF upgrades.
+\texttt{src/sj\_sim/test} to support future 6~DOF upgrades.
 
 \subsubsection{Controller and spline regression tests}
 The path utilities and controller have explicit regression tests that encode the
 sign conventions used by the closed loop:
 \begin{itemize}
-  \item \texttt{src/na\_utils/tests/test\_bspline.py} validates the B-spline Frenet
+  \item \texttt{src/sj\_utils/tests/test\_bspline.py} validates the B-spline Frenet
     frame, including the left-normal $cte$ sign on a closed circle.
-  \item \texttt{src/na\_launch/test/test\_path\_following\_3dof\_launch.py} and
-    \texttt{src/na\_launch/test/test\_path\_following\_6dof\_launch.py} launch the
+  \item \texttt{src/sj\_launch/test/test\_path\_following\_3dof\_launch.py} and
+    \texttt{src/sj\_launch/test/test\_path\_following\_6dof\_launch.py} launch the
     controller and simulator and assert that the yaw-rate sign matches the local
     path direction derived from the spline tangent.
-  \item \texttt{src/na\_sim/test/test\_enu\_conventions.py} validates ENU kinematics
+  \item \texttt{src/sj\_sim/test/test\_enu\_conventions.py} validates ENU kinematics
     in the 3~DOF model and the quaternion yaw rotation mapping.
-  \item \texttt{src/na\_utils/tests/test\_enu\_projection.py} checks that projection
+  \item \texttt{src/sj\_utils/tests/test\_enu\_projection.py} checks that projection
     prediction uses ENU body-to-world velocity.
-  \item \texttt{src/na\_controller/test/test\_los\_enu.py} validates LOS heading
+  \item \texttt{src/sj\_controller/test/test\_los\_enu.py} validates LOS heading
     math under ENU/FLU conventions.
 \end{itemize}
 These tests are written against the ENU/FLU convention (world $z$ up, body $+y$
@@ -1216,7 +1216,7 @@ $\cos(\theta/2)\approx 1-\theta^2/8$ and $\sin(\theta/2)\approx \theta/2$, so
 \]
 \textbf{Implementation mapping.} Implemented by
 \texttt{quaternion\_expmap\_wxyz()} and \texttt{integrate\_quaternion\_expmap()}
-in \texttt{src/na\_sim/na\_sim/fossen.py}.
+in \texttt{src/sj\_sim/sj\_sim/fossen.py}.
 
 \subsection{RKMK overview}
 \textbf{Purpose.} Define Lie-group Runge--Kutta integration on $SO(3)$.

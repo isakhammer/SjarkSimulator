@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_NAME="nautomatica-base:latest"
+IMAGE_NAME="sjarksimulator-base:latest"
 XSOCK=/tmp/.X11-unix
 
 USE_X11=0

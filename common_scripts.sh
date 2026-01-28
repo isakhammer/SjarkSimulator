@@ -4,7 +4,7 @@ source /root/code/install/setup.bash
 alias so='source /root/.bashrc'
 alias cbs='colcon build --symlink-install'
 # alias cb='colcon build'
-alias pyfast='cd /root/code/src/na_utils && pytest test'
+alias pyfast='cd /root/code/src/sj_utils && pytest test'
 
 # TODO: Add a separate alias to run pytest across all ROS 2 packages.
 alias bo='sudo bash build_overview_docker.sh'
@@ -24,7 +24,7 @@ ct() {
 alias colc='colcon build --packages-select cpp_pubsub'
 alias install_setup='. install/setup.bash' # do research when to do this.
 
-alias lc='ros2 launch na_launch controller_launch.py'
+alias lc='ros2 launch sj_launch controller_launch.py'
 
 lsc () {
   local path_type=""
@@ -40,9 +40,9 @@ lsc () {
     esac
   done
   if [ -n "$path_type" ]; then
-    ros2 launch na_launch sim_controller_launch.py path_type:="$path_type"
+    ros2 launch sj_launch sim_controller_launch.py path_type:="$path_type"
   else
-    ros2 launch na_launch sim_controller_launch.py
+    ros2 launch sj_launch sim_controller_launch.py
   fi
 }
 
@@ -60,9 +60,9 @@ lsc6 () {
     esac
   done
   if [ -n "$path_type" ]; then
-    ros2 launch na_launch sim_controller_6dof_launch.py path_type:="$path_type"
+    ros2 launch sj_launch sim_controller_6dof_launch.py path_type:="$path_type"
   else
-    ros2 launch na_launch sim_controller_6dof_launch.py
+    ros2 launch sj_launch sim_controller_6dof_launch.py
   fi
 }
 
@@ -77,7 +77,7 @@ alias lsc6s='lsc6 --PATH=STRAIGHT'
 alias lsc6q='lsc6 --PATH=SQUIRCLE'
 alias lsc6x='lsc6 --PATH=COMPLEX'
 
-alias testd='NA_TEST_LOG_DIR=/root/code/log/na_test_results sudo bash test_docker.sh'
+alias testd='SJ_TEST_LOG_DIR=/root/code/log/sj_test_results sudo bash test_docker.sh'
 
 alias makepkg='ros2 pkg create --build-type ament_cmake' # see https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Creating-Your-First-ROS2-Package.html
 

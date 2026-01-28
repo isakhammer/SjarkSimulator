@@ -55,7 +55,7 @@ Goals
 Steps
 - [pending] Define 3-DOF equations, frames, and sign conventions.
 - [pending] Define actuator interface: thrust magnitude + rotor angle (with rate/limits).
-- [pending] Implement the new model in `src/na_sim/na_sim` and keep topics stable where possible.
+- [pending] Implement the new model in `src/sj_sim/sj_sim` and keep topics stable where possible.
 - [pending] Add fast unit tests for dynamics sanity (stability, limits, basic responses).
 - [pending] Add/extend launch smoke test that confirms sim + planner + controller run and motion occurs.
 
@@ -155,5 +155,5 @@ Decisions
 ## Maintenance Rules
 
 - Keep content concise; avoid dumping logs or large outputs.
-- Prefer linking to paths (for example, `src/na_sim/na_sim/sim_node.py`) rather than duplicating code.
+- Prefer linking to paths (for example, `src/sj_sim/sj_sim/sim_node.py`) rather than duplicating code.
 - Remove completed plans after they have been closed for a while to keep this file short.
