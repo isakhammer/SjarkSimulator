@@ -318,20 +318,80 @@ def _wait_for_tracking_turn(
 
 
 def _collect_min_abs_r(node, duration_sec):
-    received = {"min_abs_r": None}
+    received = {"min_abs_r": None, "ctrl": None, "cmd": None}
+    start = time.monotonic()
+    log_rows: list[dict] = []
+    log_path = _log_path_for("path_following_6dof_straight_settle")
 
     def boat_cb(msg):
         value = abs(float(msg.r))
         current = received["min_abs_r"]
         received["min_abs_r"] = value if current is None else min(current, value)
+        if LOG_ENABLED:
+            now = time.monotonic()
+            ctrl = received["ctrl"]
+            cmd = received["cmd"]
+            log_rows.append(
+                {
+                    "t_sec": round(now - start, 6),
+                    "x": msg.x,
+                    "y": msg.y,
+                    "yaw": msg.yaw,
+                    "r": msg.r,
+                    "delta": msg.delta,
+                    "thrust": msg.thrust,
+                    "u": msg.u,
+                    "v": msg.v,
+                    "cte": getattr(ctrl, "cte", float("nan"))
+                    if ctrl is not None
+                    else float("nan"),
+                    "heading_error": getattr(ctrl, "heading_error", float("nan"))
+                    if ctrl is not None
+                    else float("nan"),
+                    "target_x": getattr(ctrl, "target_x", float("nan"))
+                    if ctrl is not None
+                    else float("nan"),
+                    "target_y": getattr(ctrl, "target_y", float("nan"))
+                    if ctrl is not None
+                    else float("nan"),
+                    "proj_x": getattr(ctrl, "proj_x", float("nan"))
+                    if ctrl is not None
+                    else float("nan"),
+                    "proj_y": getattr(ctrl, "proj_y", float("nan"))
+                    if ctrl is not None
+                    else float("nan"),
+                    "proj_yaw": getattr(ctrl, "proj_yaw", float("nan"))
+                    if ctrl is not None
+                    else float("nan"),
+                    "cmd_thrust": getattr(cmd, "thrust", float("nan"))
+                    if cmd is not None
+                    else float("nan"),
+                    "cmd_delta": getattr(cmd, "delta", float("nan"))
+                    if cmd is not None
+                    else float("nan"),
+                }
+            )
+
+    def ctrl_cb(msg):
+        received["ctrl"] = msg
+
+    def cmd_cb(msg):
+        received["cmd"] = msg
 
     subscription = node.create_subscription(BoatState, "/boat_state", boat_cb, 10)
+    sub_ctrl = node.create_subscription(
+        ControllerState, "/controller_ns/controller_state", ctrl_cb, 10
+    )
+    sub_cmd = node.create_subscription(RotorCommand, "/cmd_rotor", cmd_cb, 10)
     end_time = time.monotonic() + duration_sec
     try:
         while time.monotonic() < end_time and rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.1)
     finally:
+        _write_rows(log_path, log_rows)
         node.destroy_subscription(subscription)
+        node.destroy_subscription(sub_ctrl)
+        node.destroy_subscription(sub_cmd)
     return received["min_abs_r"]
 
 
