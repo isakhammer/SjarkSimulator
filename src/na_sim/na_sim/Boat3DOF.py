@@ -14,7 +14,7 @@ The model uses the standard marine craft equations:
 GENERALIZED FORCES (X, Y, N):
  Rotor-to-force mapping:
     thrust : Rotor force magnitude [N]
-    delta  : Rotor angle [rad] relative to body +x (positive to starboard/right).
+    delta  : Rotor angle [rad] relative to body +x (positive to port/left).
 
     X : Surge force  [N]
         Positive along the boat's +x axis (forward).
@@ -22,7 +22,7 @@ GENERALIZED FORCES (X, Y, N):
             X = thrust * cos(delta)
 
     Y : Sway force   [N]
-        Lateral force along the +y axis (starboard/right, Fossen FRD).
+        Lateral force along the +y axis (port/left, ROS FLU).
         Computed from the rotor inputs as:
             Y = thrust * sin(delta)
 
@@ -30,8 +30,8 @@ GENERALIZED FORCES (X, Y, N):
         Turning moment about the vertical z-axis from the stern rotor.
         If the rotor is placed behind the CG at x = -l:
             N = (-l) * Y = -l * thrust * sin(delta)
-        Positive yaw is a right turn (clockwise), so delta and yaw have
-        opposite signs.
+        Positive yaw is a left turn (counterclockwise), and a stern rotor
+        produces yaw opposite the steering angle.
 
 MODEL PARAMETERS (provided via `params`):
 
@@ -54,10 +54,10 @@ STATE VECTOR:
 
     state = [x, y, psi, u, v, r]
 
-    x, y : Inertial position in world frame (NED)
-    psi  : Heading angle (yaw) [rad], positive right (clockwise)
+    x, y : Inertial position in world frame (ENU)
+    psi  : Heading angle (yaw) [rad], positive left (counterclockwise)
     u    : Surge velocity (forward) [m/s]
-    v    : Sway velocity (sideways, +y starboard/right) [m/s]
+    v    : Sway velocity (sideways, +y port/left) [m/s]
     r    : Yaw rate [rad/s]
 
 The model is sufficient for control system design, trajectory following,

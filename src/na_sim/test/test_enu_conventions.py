@@ -31,7 +31,7 @@ def _default_params():
         (math.pi / 2.0, 0.0, 1.0, -1.0, 0.0),
     ],
 )
-def test_boat3dof_kinematics_ned(psi, u, v, expected_dx, expected_dy):
+def test_boat3dof_kinematics_enu(psi, u, v, expected_dx, expected_dy):
     boat = Boat3DOF(_default_params())
     state = np.array([0.0, 0.0, psi, u, v, 0.0], dtype=float)
     dx = boat.dynamics(state, thrust=0.0, delta=0.0)
@@ -41,7 +41,7 @@ def test_boat3dof_kinematics_ned(psi, u, v, expected_dx, expected_dy):
 
 
 @pytest.mark.parametrize("psi", [0.0, math.pi / 2.0, -math.pi / 2.0])
-def test_rotation_matrix_ned_yaw(psi):
+def test_rotation_matrix_enu_yaw(psi):
     q = np.array(
         [math.cos(psi / 2.0), 0.0, 0.0, math.sin(psi / 2.0)],
         dtype=float,
