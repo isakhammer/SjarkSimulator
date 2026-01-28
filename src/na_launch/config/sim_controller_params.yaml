@@ -6,7 +6,8 @@ controller_node:
     heading_kp: 2.0
     heading_kd: 0.5
     max_thrust: 30.0
-    max_delta: 1.57079632679
+    max_delta: 1.0471975512
+    cte_gain: 0.5
     samples_per_meter: 4.0
     max_proj_jump: 0.2
 
@@ -23,7 +24,7 @@ sim_node:
     l: 0.5
     dt: 0.02
     max_thrust: 40.0
-    max_delta: 1.57079632679
+    max_delta: 1.0471975512
     max_delta_rate: 0.0
 
 viz_node:
@@ -31,3 +32,4 @@ viz_node:
     convert_legacy_ned_to_enu: false
     use_urdf: true
     urdf_path: /root/code/src/na_launch/urdf/boat.urdf
+    debug_marker_z_offset: 4.0
