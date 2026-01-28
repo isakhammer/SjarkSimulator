@@ -1,12 +1,12 @@
 controller_node:
   ros__parameters:
     path_topic: /planner_ns/path
-    lookahead: 1.5
-    base_thrust: 20.0
-    heading_kp: 8.0
-    heading_kd: 1.5
+    lookahead: 8.0
+    base_thrust: 30.0
+    heading_kp: 2.0
+    heading_kd: 0.3
     max_thrust: 40.0
-    max_delta: 1.57079632679
+    max_delta: 0.8
     samples_per_meter: 4.0
     max_proj_jump: 0.2
 
