@@ -35,6 +35,7 @@ These guidelines keep the Nautomatic ROS 2 workspace consistent, testable, and e
 
 - Run `ct` (from `common_scripts.sh`) after implementing features to execute `colcon test` and print results.
 - Maintain linter coverage (`flake8`, `pep257`, `xmllint`) when adding files.
+- Docker test runs (`test_docker.sh` or `testd`) write CSV logs to `log/na_test_results` by default; override with `NA_TEST_LOG_DIR`.
 
 ## Planning & Documentation
 
