@@ -59,4 +59,4 @@ This repository is a ROS 2 workspace containing message definitions, simulation,
 ## Sim Sign Conventions
 
 - Simulation yaw sign mismatch likely indicates actuator sign differences; confirm the convention and align simulation to match controller and 3DOF setup.
-- Recommended convention: world NED (+z down), body FRD (+x forward, +y right, +z down), yaw positive clockwise (right turn) in `[-pi, pi]`, rotor delta positive starboard (pointing right).
+- Recommended convention: world ENU (+x east, +y north, +z up), body FLU (+x forward, +y left, +z up), yaw positive counterclockwise (left turn) in `[-pi, pi]`, rotor delta positive port (pointing left).
